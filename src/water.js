@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { windUniforms } from './wind.js';
+import { envUniforms } from './environment.js';
 import { groundHeight, WATER_Y } from './terrain.js';
 
 function addWaterScroll(material) {
@@ -7,6 +8,11 @@ function addWaterScroll(material) {
   material.onBeforeCompile = (shader) => {
     if (prev) prev(shader);
     shader.uniforms.uTime = windUniforms.uTime;
+    shader.uniforms.uDayFactor = envUniforms.uDayFactor;
+    shader.uniforms.uMoonDir = envUniforms.uMoonDir;
+    shader.uniforms.uMoonColor = envUniforms.uMoonColor;
+    shader.uniforms.uHorizon = envUniforms.uHorizon;
+
     shader.vertexShader = `
       attribute float aDepth;
       varying float vDepth;
@@ -19,7 +25,11 @@ function addWaterScroll(material) {
       varying float vDepth;
     ` + shader.fragmentShader
       .replace('#include <emissivemap_pars_fragment>', `#include <emissivemap_pars_fragment>
-        uniform float uTime;`)
+        uniform float uTime;
+        uniform float uDayFactor;
+        uniform vec3 uMoonDir;
+        uniform vec3 uMoonColor;
+        uniform vec3 uHorizon;`)
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
         {
           // Rotated non-Cartesian wave directions break repetitive square grid
@@ -42,7 +52,26 @@ function addWaterScroll(material) {
                     + d3 * (cos(w3) * 0.09)
                     + d4 * (cos(w4) * 0.05);
 
-          normal = normalize(normal + vec3(grad.x, 0.0, grad.y) * 0.35);
+          // Increased ripple amplitude for crisp wave relief in low light
+          normal = normalize(normal + vec3(grad.x, 0.0, grad.y) * 0.58);
+
+          // Make water ripples and movement vividly visible at night
+          float nightFactor = 1.0 - uDayFactor;
+          if (nightFactor > 0.01) {
+            // Wave crest pattern
+            float waveCrest = sin(w1) * 0.36 + cos(w2) * 0.28 + sin(w3) * 0.22 + cos(w4) * 0.14;
+            float crestMask = smoothstep(0.06, 0.52, waveCrest);
+
+            // Glistening moon glade / specular highlights dancing across wave faces
+            vec3 V = normalize(cameraPosition - vWorldPosition);
+            vec3 H = normalize(uMoonDir + V);
+            float NdotH = max(dot(normal, H), 0.0);
+            float moonGlade = pow(NdotH, 32.0) * 0.90 + pow(NdotH, 7.0) * 0.25;
+
+            // Glowing moon-kissed wave crests & moon glade reflection
+            vec3 moonWaterTone = mix(uHorizon * 1.3, uMoonColor * 1.6, 0.70);
+            totalEmissiveRadiance += moonWaterTone * (crestMask * 0.085 + moonGlade * 0.55) * nightFactor;
+          }
         }`)
       .replace(
         '#include <dithering_fragment>',
