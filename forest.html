@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Dense Forest — Three.js</title>
+<title>Dense Forest & Terrain Level Editor — Three.js</title>
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden; background: #0c1208; }
   #app { position: fixed; inset: 0; }
@@ -20,7 +20,10 @@
   /* Right Side Controls Panel */
   .side-panel {
     position: fixed; top: 12px; right: 16px; z-index: 20;
-    width: 242px;
+    width: 254px;
+    max-height: calc(100vh - 24px);
+    overflow-y: auto;
+    overflow-x: hidden;
     background: rgba(10, 16, 12, 0.88);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
@@ -34,6 +37,8 @@
     box-sizing: border-box;
     transition: all 0.2s ease-in-out;
   }
+  .side-panel::-webkit-scrollbar { width: 4px; }
+  .side-panel::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 2px; }
   .side-panel.collapsed #sidePanelBody {
     display: none;
   }
@@ -49,7 +54,7 @@
     margin-bottom: 8px;
   }
   .ctrl-group {
-    margin-bottom: 8px;
+    margin-bottom: 7px;
   }
   .ctrl-row {
     display: flex;
@@ -137,6 +142,37 @@
   .action-btn:hover {
     background: rgba(255, 255, 255, 0.28);
   }
+
+  /* Level Editor Brush Palette */
+  .brush-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px;
+    margin-top: 4px;
+  }
+  .brush-btn {
+    cursor: pointer;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    color: #eaf2df;
+    padding: 4px 2px;
+    border-radius: 8px;
+    font: 10px monospace;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    transition: all 0.15s;
+  }
+  .brush-btn:hover {
+    background: rgba(255, 255, 255, 0.25);
+  }
+  .brush-btn.active {
+    background: rgba(126, 240, 136, 0.35);
+    border-color: #7ef088;
+    color: #fff;
+    box-shadow: 0 0 8px rgba(126, 240, 136, 0.4);
+  }
 </style>
 </head>
 <body>
@@ -154,17 +190,79 @@
   </div>
 </div>
 
-<!-- Right Side Controls Panel (Sliders on side) -->
+<!-- Right Side Controls Panel (Sliders & Terrain Editor on side) -->
 <div id="sideControlsPanel" class="side-panel">
   <div class="panel-header">
     <div style="display:flex; align-items:center; gap:6px;">
-      <span style="font-size:13px;">⚙️</span>
-      <b style="color:#eaf2df; letter-spacing:0.04em;">CONTROLS</b>
+      <span style="font-size:13px;">🛠️</span>
+      <b style="color:#eaf2df; letter-spacing:0.04em;">LEVEL EDITOR</b>
     </div>
     <button id="collapseSidePanelBtn" title="Collapse Panel" class="icon-btn">—</button>
   </div>
 
   <div id="sidePanelBody" class="panel-body">
+    <!-- Level Editor Brushes -->
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+      <span style="font-weight:bold; color:#7ef088; font-size:11px;">🎨 TERRAIN BRUSHES</span>
+      <span style="font-size:9.5px; color:rgba(235,245,225,0.65);">L-Click: Draw</span>
+    </div>
+    
+    <div class="brush-grid">
+      <button class="brush-btn active" data-brush="grass" title="Green Ground (Grass & Trees grow here)">
+        <span>🌿</span>Grass
+      </button>
+      <button class="brush-btn" data-brush="sand" title="Golden Sand / Beach (Clears grass)">
+        <span>🏖️</span>Sand
+      </button>
+      <button class="brush-btn" data-brush="road" title="Earthen Trail / Road (Clears grass)">
+        <span>🛤️</span>Road
+      </button>
+      <button class="brush-btn" data-brush="water" title="Water Basin & River Border">
+        <span>🌊</span>Water
+      </button>
+      <button class="brush-btn" data-brush="raise" title="Sculpt / Raise Mountain Elevation">
+        <span>⛰️</span>Raise
+      </button>
+      <button class="brush-btn" data-brush="lower" title="Dig / Lower Valley Elevation">
+        <span>🔻</span>Lower
+      </button>
+      <button class="brush-btn" data-brush="smooth" title="Smooth Heights & Transitions">
+        <span>〰️</span>Smooth
+      </button>
+      <button class="brush-btn" data-brush="rock" title="Rugged Cliff Rock">
+        <span>🪨</span>Rock
+      </button>
+    </div>
+
+    <!-- Brush Radius & Strength -->
+    <div class="ctrl-group" style="margin-top:6px;">
+      <div class="ctrl-row">
+        <span class="ctrl-label">⭕ Brush Radius</span>
+        <span id="brushRadiusVal" class="ctrl-val" style="color:#7ef088;">10m</span>
+      </div>
+      <input id="brushRadiusSlider" type="range" min="2" max="35" step="1" value="10" class="ctrl-slider" style="accent-color:#7ef088;">
+    </div>
+    <div class="ctrl-group">
+      <div class="ctrl-row">
+        <span class="ctrl-label">💧 Brush Strength</span>
+        <span id="brushStrengthVal" class="ctrl-val" style="color:#7ef088;">45%</span>
+      </div>
+      <input id="brushStrengthSlider" type="range" min="0.1" max="1.0" step="0.05" value="0.45" class="ctrl-slider" style="accent-color:#7ef088;">
+    </div>
+
+    <!-- PCG Procedural Generation Tools -->
+    <div style="display:flex; gap:4px; margin-top:4px; margin-bottom:8px;">
+      <button id="pcgNewWorldBtn" class="action-btn" style="flex:1; padding:3px 4px; font-size:10px; background:rgba(60, 160, 220, 0.4);" title="Procedurally generate a new random island landscape">
+        🎲 PCG New
+      </button>
+      <button id="pcgResetBtn" class="action-btn" style="flex:1; padding:3px 4px; font-size:10px; background:rgba(200, 70, 50, 0.4);" title="Reset terrain back to default procedural state">
+        ↺ Reset
+      </button>
+    </div>
+
+    <div style="height:1px; background:rgba(255,255,255,0.12); margin:8px 0;"></div>
+
+    <!-- Environment & Grass Settings -->
     <!-- Time of Day -->
     <div class="ctrl-group">
       <div class="ctrl-row">
@@ -255,13 +353,13 @@
 <!-- Minimal Unobstructed Bottom HUD -->
 <div class="hud">
   <div style="display:flex; align-items:center; gap:8px; margin-bottom:3px;">
-    <b>DENSE FOREST</b>
+    <b>DENSE FOREST & LEVEL EDITOR</b>
     <span id="hudFps" style="color:#7ef088; font-weight:bold; background:rgba(0,0,0,0.45); padding:1px 6px; border-radius:8px;">-- FPS</span>
     <button id="toggleSideBtn" style="pointer-events:auto; cursor:pointer; background:rgba(255,255,255,0.18); border:1px solid rgba(255,255,255,0.35); color:#eaf2df; padding:2px 8px; border-radius:12px; font:11px monospace; backdrop-filter:blur(4px);">
-      ⚙️ Controls
+      🛠️ Editor Controls
     </button>
   </div>
-  <span id="hudHelp">WASD — walk &nbsp;·&nbsp; SHIFT — sprint &nbsp;·&nbsp; SPACE — jump &nbsp;·&nbsp; P — toggle FX &nbsp;·&nbsp; V — walk &nbsp;·&nbsp; 🥽 VR: Quest Ready</span>
+  <span id="hudHelp">🖱️ Left: Draw on terrain &nbsp;·&nbsp; Right: Look around &nbsp;·&nbsp; Middle: Pan &nbsp;·&nbsp; Wheel: Zoom &nbsp;·&nbsp; V: Walk Mode</span>
 </div>
 
 <script type="importmap">

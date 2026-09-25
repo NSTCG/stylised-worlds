@@ -13,6 +13,7 @@ import { setupPostProcessing } from './postfx.js';
 import { setupControls } from './controls.js';
 import { setupVR } from './vr.js';
 import { setGroundBlendIntensity } from './groundBlend.js';
+import { setupTerrainEditor } from './terrainEditor.js';
 
 window.setGrassHeightScale = setGrassHeightScale;
 
@@ -47,6 +48,10 @@ buildGrass(scene);
 buildRocks(scene);
 const { updateFireflies } = createFireflies(scene);
 hookAtmosphericFogToScene(scene);
+
+/* ---------------------------------------------------------- terrain level editor */
+const terrainEditor = setupTerrainEditor(scene, camera, renderer.domElement);
+window.terrainEditor = terrainEditor;
 
 /* ---------------------------------------------------------- triangle stats tracker */
 const { updateUI: updateTriStats } = setupStats(scene, renderer);

@@ -51,15 +51,16 @@ export function pathFactor(x, z) {
 }
 
 /* ---------------------------------------------------------- biomes & albedo */
-const cGrassLush = new THREE.Color(0x4ca03e); // stylized vibrant green
-const cGrassWarm = new THREE.Color(0x6eb84e); // bright sunlit meadow
-const cGrassDark = new THREE.Color(0x2d6824); // deep mossy forest green
-const cPath      = new THREE.Color(0x826649); // earthen path
-const cSandWet   = new THREE.Color(0xbfa472); // wet sand at shoreline
-const cSand      = new THREE.Color(0xecd396); // warm golden beach sand
-const cSeaShallow = new THREE.Color(0x237075); // turquoise shallows bed
-const cSeaMid     = new THREE.Color(0x113b5e); // deep ocean floor
-const cSeaDeep    = new THREE.Color(0x061a30); // abyss floor
+export const cGrassLush = new THREE.Color(0x4ca03e); // stylized vibrant green
+export const cGrassWarm = new THREE.Color(0x6eb84e); // bright sunlit meadow
+export const cGrassDark = new THREE.Color(0x2d6824); // deep mossy forest green
+export const cPath      = new THREE.Color(0x826649); // earthen path
+export const cSandWet   = new THREE.Color(0xbfa472); // wet sand at shoreline
+export const cSand      = new THREE.Color(0xecd396); // warm golden beach sand
+export const cSeaShallow = new THREE.Color(0x237075); // turquoise shallows bed
+export const cSeaMid     = new THREE.Color(0x113b5e); // deep ocean floor
+export const cSeaDeep    = new THREE.Color(0x061a30); // abyss floor
+export const cRock       = new THREE.Color(0x6e747b); // rugged cliff rock
 const _tc = new THREE.Color();
 
 export function terrainAlbedo(x, z, yVal) {
@@ -131,6 +132,12 @@ export function getTerrainDataTexture(size = 512) {
   return tex;
 }
 
+let _cachedGroundMesh = null;
+
+export function getGroundMesh() {
+  return _cachedGroundMesh;
+}
+
 export function createGround(scene) {
   const geo = new THREE.PlaneGeometry(440, 440, 200, 200);
   geo.rotateX(-Math.PI / 2);
@@ -152,6 +159,7 @@ export function createGround(scene) {
   ground.name = 'terrain_ground';
   ground.receiveShadow = true;
   scene.add(ground);
+  _cachedGroundMesh = ground;
   return ground;
 }
 

@@ -8,11 +8,19 @@ export function setupControls(camera, domElement, onTogglePostProcessing) {
   controls.enableDamping = true;
   controls.dampingFactor = 0.06;
   controls.minDistance = 5;
-  controls.maxDistance = 70;
+  controls.maxDistance = 140;
   controls.maxPolarAngle = Math.PI * 0.49;
-  controls.autoRotate = true;
+  controls.autoRotate = false;
   controls.autoRotateSpeed = 0.45;
-  domElement.addEventListener('pointerdown', () => { controls.autoRotate = false; }, { once: true });
+
+  // Level Editor Mouse Configuration:
+  // Right click to look around / orbit, Middle click to pan, Left click reserved to draw
+  controls.mouseButtons = {
+    LEFT: null,
+    MIDDLE: THREE.MOUSE.PAN,
+    RIGHT: THREE.MOUSE.ROTATE
+  };
+  domElement.addEventListener('contextmenu', (e) => e.preventDefault());
 
   let isWalkMode = false;
   const keys = { w: false, a: false, s: false, d: false, shift: false, space: false };
