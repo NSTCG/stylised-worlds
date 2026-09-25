@@ -169,18 +169,7 @@ export function setupEnvironment(scene) {
         // 1. Sky Gradient (Zenith to Horizon)
         vec3 col = mix(uHorizon, uZenith, pow(max(h, 0.0), 0.52));
 
-        // 2. Stars (Visible at Night when looking upwards, VR safe)
-        if (uDayFactor < 0.85 && d.y > 0.08) {
-          vec2 starCoord = floor((d.xz / (d.y + 0.40)) * 140.0);
-          float starVal = hash2_vr(starCoord);
-          if (starVal > 0.982) {
-            float twinkle = sin(uTime * 3.5 + starVal * 31.4) * 0.5 + 0.5;
-            float starIntensity = pow((starVal - 0.982) / 0.018, 2.0) * twinkle * (1.0 - uDayFactor) * smoothstep(0.08, 0.40, d.y);
-            col += vec3(0.85, 0.92, 1.0) * starIntensity * 1.6;
-          }
-        }
-
-        // 3. Sun Disk & Golden Corona Glow
+        // 2. Sun Disk & Golden Corona Glow
         float sDot = dot(d, uSunDir);
         if (sDot > 0.0 && uSunDir.y > -0.15) {
           float sunDisc = smoothstep(0.9992, 0.9998, sDot);
