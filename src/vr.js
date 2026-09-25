@@ -211,7 +211,10 @@ export function setupVR(renderer, scene, camera, player, getIsWalkMode, controls
         }
       } catch (e) {}
 
-      // Keep camera rig and camera world transforms synced
+      // Refresh XR camera and keep camera rig and camera world transforms synced
+      if (renderer.xr.updateCamera) {
+        renderer.xr.updateCamera(camera);
+      }
       cameraRig.updateMatrixWorld(true);
       camera.updateMatrixWorld(true);
 
@@ -239,12 +242,24 @@ export function setupVR(renderer, scene, camera, player, getIsWalkMode, controls
         }
 
         if (src.handedness === 'left') {
-          // Move in exact direction user is looking in VR headset (respects head gaze + right stick snap turns)
+          // Move in exact direction user is looking in VR headset (respects real-time head gaze + rig snap turns)
           if (Math.abs(stickX) > 0.12 || Math.abs(stickY) > 0.12) {
             const moveSpeed = 6.5 * dt;
-            const headDir = new THREE.Vector3();
-            // Read direction directly from camera which has both head orientation and rig rotation applied
-            camera.getWorldDirection(headDir);
+
+            // Get the active WebXR headset camera with real-time 6DoF tracking
+            const xrCam = renderer.xr.getCamera ? renderer.xr.getCamera() : null;
+
+            // Compute real-time world-space forward gaze direction from the headset:
+            // 1. Start with -Z forward vector
+            // 2. Apply headset 6DoF rotation in physical room
+            // 3. Apply cameraRig rotation in virtual world
+            const headDir = new THREE.Vector3(0, 0, -1);
+            if (xrCam && xrCam.quaternion) {
+              headDir.applyQuaternion(xrCam.quaternion);
+            } else {
+              camera.getWorldDirection(headDir);
+            }
+            headDir.applyQuaternion(cameraRig.quaternion);
             headDir.y = 0;
             if (headDir.lengthSq() > 0.0001) {
               headDir.normalize();
