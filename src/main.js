@@ -36,7 +36,7 @@ window.camera = camera;
 window.renderer = renderer;
 
 /* ---------------------------------------------------------- world modules */
-setupEnvironment(scene);
+const { updateEnvironment, envConfig } = setupEnvironment(scene);
 createGround(scene);
 const { updateWater } = createWater(scene);
 createMountain(scene);
@@ -67,6 +67,26 @@ if (groundBlendSlider) {
   });
 }
 
+// Hook Day/Night Time Controls
+const timeOfDaySlider = document.getElementById('timeOfDaySlider');
+if (timeOfDaySlider) {
+  timeOfDaySlider.addEventListener('input', (e) => {
+    envConfig.timeOfDay = Number(e.target.value) / 100;
+    updateEnvironment(clock.getElapsedTime(), 0);
+    renderer.render(scene, camera);
+  });
+  timeOfDaySlider.addEventListener('pointerdown', () => { envConfig.autoCycle = false; });
+  timeOfDaySlider.addEventListener('pointerup', () => { envConfig.autoCycle = true; });
+}
+
+const timeCycleBtn = document.getElementById('timeCycleBtn');
+if (timeCycleBtn) {
+  timeCycleBtn.addEventListener('click', () => {
+    envConfig.autoCycle = !envConfig.autoCycle;
+    timeCycleBtn.style.background = envConfig.autoCycle ? 'rgba(255,255,255,0.15)' : 'rgba(230,80,60,0.5)';
+  });
+}
+
 /* ---------------------------------------------------------- main loop */
 const clock = new THREE.Clock();
 let frame = 0;
@@ -77,6 +97,9 @@ function tick() {
   const t = clock.getElapsedTime();
   windUniforms.uTime.value = t;
   frame++;
+
+  // Update dynamic Day / Night cycle (Sun, Moon, Stars, drifting Clouds, Fog, Lighting)
+  updateEnvironment(t, dt);
 
   // Bake static shadow map on initial frames, then freeze for maximum Quest performance
   if (frame <= 3) {
