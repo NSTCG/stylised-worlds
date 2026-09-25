@@ -1,12 +1,84 @@
 import * as THREE from 'three';
 
+// Install Directional Atmospheric In-Scattering Fog into Three.js ShaderChunks
+THREE.ShaderChunk.fog_pars_vertex = `
+  #ifdef USE_FOG
+    varying float vFogDepth;
+    varying vec3 vAtmosphereViewDir;
+  #endif
+`;
+
+THREE.ShaderChunk.fog_vertex = `
+  #ifdef USE_FOG
+    vFogDepth = - mvPosition.z;
+    vAtmosphereViewDir = vec3(
+      dot(viewMatrix[0].xyz, mvPosition.xyz),
+      dot(viewMatrix[1].xyz, mvPosition.xyz),
+      dot(viewMatrix[2].xyz, mvPosition.xyz)
+    );
+  #endif
+`;
+
+THREE.ShaderChunk.fog_pars_fragment = `
+  #ifdef USE_FOG
+    uniform vec3 fogColor;
+    varying float vFogDepth;
+    varying vec3 vAtmosphereViewDir;
+    #ifdef FOG_EXP2
+      uniform float fogDensity;
+    #else
+      uniform float fogNear;
+      uniform float fogFar;
+    #endif
+    uniform vec3 uAtmoSunDir;
+    uniform vec3 uAtmoMoonDir;
+    uniform vec3 uAtmoZenith;
+    uniform vec3 uAtmoHorizon;
+    uniform vec3 uAtmoSunColor;
+    uniform vec3 uAtmoMoonColor;
+  #endif
+`;
+
+THREE.ShaderChunk.fog_fragment = `
+  #ifdef USE_FOG
+    #ifdef FOG_EXP2
+      float fogFactor = 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );
+    #else
+      float fogFactor = smoothstep( fogNear, fogFar, vFogDepth );
+    #endif
+
+    vec3 dirFogColor = fogColor;
+    if (dot(vAtmosphereViewDir, vAtmosphereViewDir) > 0.0001) {
+      vec3 d = normalize(vAtmosphereViewDir);
+      float h = clamp(d.y * 1.5 + 0.15, 0.0, 1.0);
+      dirFogColor = mix(uAtmoHorizon, uAtmoZenith, pow(h, 0.52));
+
+      // Directional forward scattering towards Sun
+      float sDot = dot(d, uAtmoSunDir);
+      if (sDot > 0.0 && uAtmoSunDir.y > -0.18) {
+        float sunGlow = pow(sDot, 20.0) * 0.45 + pow(sDot, 3.5) * 0.12;
+        dirFogColor += uAtmoSunColor * sunGlow * smoothstep(-0.18, 0.15, uAtmoSunDir.y);
+      }
+
+      // Directional forward scattering towards Moon
+      float mDot = dot(d, uAtmoMoonDir);
+      if (mDot > 0.0 && uAtmoMoonDir.y > -0.18) {
+        float moonGlow = pow(mDot, 16.0) * 0.28 + pow(mDot, 2.8) * 0.06;
+        dirFogColor += uAtmoMoonColor * moonGlow * smoothstep(-0.18, 0.15, uAtmoMoonDir.y);
+      }
+    }
+
+    gl_FragColor.rgb = mix( gl_FragColor.rgb, dirFogColor, fogFactor );
+  #endif
+`;
+
 export const envConfig = {
   cycleDuration: 120.0, // seconds for a full 24h day/night cycle
   autoCycle: true,
   timeOfDay: 0.45, // 0.0 = midnight (00:00), 0.25 = sunrise (06:00), 0.50 = noon (12:00), 0.75 = sunset (18:00)
   sunIntensity: 2.35,
-  moonIntensity: 0.65,
-  fogBaseDensity: 0.0125 // Increased atmospheric fog (~3x denser than before, beautifully shrouds distant trees)
+  moonIntensity: 0.18, // Reduced bright moonlight from 0.65 to 0.18 for realistic moody night GI
+  fogBaseDensity: 0.0125 // Increased atmospheric fog (~3x denser than before)
 };
 
 export const envUniforms = {
@@ -185,19 +257,20 @@ export function setupEnvironment(scene) {
   // Reusable Color Buffers
   const cZenithDay   = new THREE.Color(0x5a94d8);
   const cZenithSun   = new THREE.Color(0x3d2b63); // Sunset deep violet
-  const cZenithNight = new THREE.Color(0x040814); // Night abyss navy
+  const cZenithNight = new THREE.Color(0x05122e); // Rich deep indigo blue
 
   const cHorizonDay   = new THREE.Color(0xe8d8be);
   const cHorizonSun   = new THREE.Color(0xed6834); // Fiery golden amber
-  const cHorizonNight = new THREE.Color(0x0c1524); // Cold midnight slate
+  const cHorizonNight = new THREE.Color(0x091b3b); // Atmospheric midnight blue horizon
 
   const cSunDay = new THREE.Color(0xfff0cc);
   const cSunSet = new THREE.Color(0xff7733);
 
-  const cMoonLight = new THREE.Color(0x9bbce8);
+  // Cinematic moonlight blue
+  const cMoonLight = new THREE.Color(0x4a82cf); // Rich environmental blue tint
   const cFogDay    = new THREE.Color(0xd9cdb8);
   const cFogSun    = new THREE.Color(0x8a4d3b);
-  const cFogNight  = new THREE.Color(0x09101c);
+  const cFogNight  = new THREE.Color(0x08152e);
 
   function updateEnvironment(t, dt = 0.016) {
     envUniforms.uTime.value = t;
@@ -260,20 +333,25 @@ export function setupEnvironment(scene) {
       dirLight.color.copy(cSunDay).lerp(cSunSet, sunsetFactor);
       dirLight.intensity = Math.max(0.05, envConfig.sunIntensity * dayFactor);
     } else {
-      // Night Moon
+      // Night Moon: Soft moody moonlight with rich blue hue
       dirLight.position.copy(envUniforms.uMoonDir.value).multiplyScalar(130);
       dirLight.color.copy(cMoonLight);
       const moonFactor = THREE.MathUtils.clamp((-sunElevation) / 0.5, 0.0, 1.0);
       dirLight.intensity = envConfig.moonIntensity * moonFactor;
     }
 
-    // Hemisphere & Ambient Light Modulation
-    hemi.color.copy(cZenithNight).lerp(new THREE.Color(0x92b9e6), dayFactor);
-    hemi.groundColor.copy(new THREE.Color(0x060c08)).lerp(new THREE.Color(0x182412), dayFactor);
-    hemi.intensity = 0.08 + 0.18 * dayFactor;
+    // Hemisphere & Ambient Light Modulation (Reduced Night GI + Rich Environmental Blue Tint)
+    // Night sky hemilight: deep midnight blue (0x122a5c)
+    // Night ground hemilight: dark midnight navy/ground (0x030814)
+    hemi.color.copy(new THREE.Color(0x122a5c)).lerp(new THREE.Color(0x92b9e6), dayFactor);
+    hemi.groundColor.copy(new THREE.Color(0x030814)).lerp(new THREE.Color(0x182412), dayFactor);
+    // Reduced night GI intensity: 0.022 at night, up to 0.26 during the day
+    hemi.intensity = 0.022 + 0.238 * dayFactor;
 
-    ambient.color.copy(new THREE.Color(0x050912)).lerp(new THREE.Color(0x0c140e), dayFactor);
-    ambient.intensity = 0.03 + 0.05 * dayFactor;
+    // Ambient light: environmental blue tint (0x081836) at night
+    ambient.color.copy(new THREE.Color(0x081836)).lerp(new THREE.Color(0x0c140e), dayFactor);
+    // Reduced night ambient intensity: 0.010 at night, up to 0.07 during the day
+    ambient.intensity = 0.010 + 0.060 * dayFactor;
 
     // Update HUD time of day slider if present
     const timeSlider = document.getElementById('timeOfDaySlider');
@@ -309,4 +387,30 @@ export function setupEnvironment(scene) {
     envConfig,
     updateEnvironment
   };
+}
+
+export function applyAtmosphericFog(material) {
+  if (!material) return;
+  const prev = material.onBeforeCompile;
+  material.onBeforeCompile = (shader, renderer) => {
+    if (prev) prev(shader, renderer);
+    shader.uniforms.uAtmoSunDir   = envUniforms.uSunDir;
+    shader.uniforms.uAtmoMoonDir  = envUniforms.uMoonDir;
+    shader.uniforms.uAtmoZenith   = envUniforms.uZenith;
+    shader.uniforms.uAtmoHorizon  = envUniforms.uHorizon;
+    shader.uniforms.uAtmoSunColor = envUniforms.uSunColor;
+    shader.uniforms.uAtmoMoonColor = envUniforms.uMoonColor;
+  };
+  material.needsUpdate = true;
+}
+
+export function hookAtmosphericFogToScene(scene) {
+  scene.traverse(obj => {
+    if (obj.isMesh && obj.material && obj.name !== 'sky_dome') {
+      const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+      for (const m of mats) {
+        applyAtmosphericFog(m);
+      }
+    }
+  });
 }

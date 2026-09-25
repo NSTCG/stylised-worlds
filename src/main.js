@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { windUniforms } from './wind.js';
-import { setupEnvironment } from './environment.js';
+import { setupEnvironment, hookAtmosphericFogToScene } from './environment.js';
 import { createGround } from './terrain.js';
 import { createWater } from './water.js';
 import { createMountain } from './mountain.js';
@@ -44,6 +44,7 @@ buildTrees(scene);
 buildGrass(scene);
 buildRocks(scene);
 const { updateFireflies } = createFireflies(scene);
+hookAtmosphericFogToScene(scene);
 
 /* ---------------------------------------------------------- triangle stats tracker */
 const { updateUI: updateTriStats } = setupStats(scene, renderer);
