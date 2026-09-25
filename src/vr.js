@@ -136,8 +136,13 @@ export function setupVR(renderer, scene, camera, player, getIsWalkMode, controls
         }
       }
       try {
-        if (session.renderState?.baseLayer) {
+        if (session.renderState?.baseLayer && 'fixedFoveation' in session.renderState.baseLayer) {
           session.renderState.baseLayer.fixedFoveation = 1.0;
+        }
+        if (session.renderState?.layers) {
+          for (const layer of session.renderState.layers) {
+            if (layer && 'fixedFoveation' in layer) layer.fixedFoveation = 1.0;
+          }
         }
       } catch (e) {}
     }
@@ -196,8 +201,13 @@ export function setupVR(renderer, scene, camera, player, getIsWalkMode, controls
         renderer.xr.setFoveation(1.0);
       }
       try {
-        if (session.renderState?.baseLayer) {
+        if (session.renderState?.baseLayer && 'fixedFoveation' in session.renderState.baseLayer) {
           session.renderState.baseLayer.fixedFoveation = 1.0;
+        }
+        if (session.renderState?.layers) {
+          for (const layer of session.renderState.layers) {
+            if (layer && 'fixedFoveation' in layer) layer.fixedFoveation = 1.0;
+          }
         }
       } catch (e) {}
 
