@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dense Forest — Three.js</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0c1208; }
+  #app { position: fixed; inset: 0; }
+  .hud {
+    position: fixed; left: 16px; bottom: 14px; z-index: 2;
+    font: 12px/1.5 ui-monospace, Consolas, monospace;
+    color: rgba(235, 240, 225, .85); text-shadow: 0 1px 3px rgba(0,0,0,.7);
+    pointer-events: none; user-select: none;
+  }
+  .hud b { color: #eaf2df; font-size: 13px; letter-spacing: .06em; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<!-- Top Stats Bar: Total Triangles & Object Breakdown -->
+<div id="topStatsBar" style="position:fixed; top:12px; left:16px; z-index:10; font:11.5px/1.4 ui-monospace, Consolas, monospace; color:#eaf2df; background:rgba(10, 16, 12, 0.88); padding:5px 12px; border-radius:12px; border:1px solid rgba(255,255,255,0.25); backdrop-filter:blur(8px); box-shadow:0 4px 16px rgba(0,0,0,0.5); user-select:none; display:flex; align-items:center; gap:12px;">
+  <div style="display:flex; align-items:center; gap:6px;">
+    <span style="color:#7ef088; font-weight:bold; font-size:12.5px;">▲ <span id="statTotalTri">...</span></span>
+    <span style="color:rgba(235,245,225,0.65); font-size:10.5px;">TOTAL TRIS</span>
+  </div>
+  <div style="height:14px; width:1px; background:rgba(255,255,255,0.2);"></div>
+  <div id="triBreakdownChips" style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+    <!-- Populated dynamically by src/stats.js -->
+  </div>
+</div>
+
+<div class="hud">
+  <div style="display:flex; align-items:center; gap:8px; margin-bottom:3px;">
+    <b>DENSE FOREST</b>
+    <span id="hudFps" style="color:#7ef088; font-weight:bold; background:rgba(0,0,0,0.45); padding:1px 6px; border-radius:8px;">-- FPS</span>
+    <button id="modeBtn" style="pointer-events:auto; cursor:pointer; background:rgba(255,255,255,0.2); border:1px solid rgba(255,255,255,0.4); color:#fff; padding:2px 8px; border-radius:12px; font:11px monospace; backdrop-filter:blur(4px);">
+      🚶 Walk Mode (V)
+    </button>
+    <button id="fxBtn" style="pointer-events:auto; cursor:pointer; background:rgba(230, 140, 30, 0.5); border:1px solid rgba(255,255,255,0.4); color:#fff; padding:2px 8px; border-radius:12px; font:11px monospace; backdrop-filter:blur(4px);">
+      ⚡ Quest Mode: FX OFF (P)
+    </button>
+    <div style="display:flex; align-items:center; gap:5px; pointer-events:auto; background:rgba(0,0,0,0.5); padding:2px 8px; border-radius:12px; border:1px solid rgba(255,255,255,0.3); font:11px monospace;">
+      <span style="color:#a8f09e;">🌾 Density:</span>
+      <input id="grassDensitySlider" type="range" min="2" max="50" step="1" value="16" style="width:65px; cursor:pointer; accent-color:#4ca03e;">
+      <span id="grassDensityVal" style="color:#fff; font-weight:bold; min-width:42px;">16/m²</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:5px; pointer-events:auto; background:rgba(0,0,0,0.5); padding:2px 8px; border-radius:12px; border:1px solid rgba(255,255,255,0.3); font:11px monospace;">
+      <span style="color:#7ef088;">⭕ Radius:</span>
+      <input id="grassRadiusSlider" type="range" min="15" max="65" step="5" value="35" style="width:55px; cursor:pointer; accent-color:#7ef088;">
+      <span id="grassRadiusVal" style="color:#fff; font-weight:bold; min-width:32px;">35m</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:5px; pointer-events:auto; background:rgba(0,0,0,0.5); padding:2px 8px; border-radius:12px; border:1px solid rgba(255,255,255,0.3); font:11px monospace;">
+      <span style="color:#a8f09e;">⛰️ Blend:</span>
+      <input id="groundBlendSlider" type="range" min="0" max="1" step="0.05" value="0.65" style="width:50px; cursor:pointer; accent-color:#4ca03e;">
+      <span id="groundBlendVal" style="color:#fff; font-weight:bold; min-width:32px;">65%</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:5px; pointer-events:auto; background:rgba(0,0,0,0.5); padding:2px 8px; border-radius:12px; border:1px solid rgba(255,255,255,0.3); font:11px monospace;">
+      <span style="color:#7ef088;">🎨 Color:</span>
+      <input type="color" id="grassColorPicker" value="#4ca03e" style="width:20px; height:18px; border:none; border-radius:4px; cursor:pointer; padding:0; background:none;">
+      <div style="display:flex; gap:3px;">
+        <button class="colorPreset" data-color="#4ca03e" title="Lush Green" style="width:13px; height:13px; border-radius:50%; background:#4ca03e; border:1px solid #fff; cursor:pointer; padding:0;"></button>
+        <button class="colorPreset" data-color="#c5af45" title="Golden Meadow" style="width:13px; height:13px; border-radius:50%; background:#c5af45; border:1px solid #fff; cursor:pointer; padding:0;"></button>
+        <button class="colorPreset" data-color="#256220" title="Deep Pine" style="width:13px; height:13px; border-radius:50%; background:#256220; border:1px solid #fff; cursor:pointer; padding:0;"></button>
+        <button class="colorPreset" data-color="#af572e" title="Autumn Glow" style="width:13px; height:13px; border-radius:50%; background:#af572e; border:1px solid #fff; cursor:pointer; padding:0;"></button>
+        <button class="colorPreset" data-color="#1ea476" title="Emerald Fantasy" style="width:13px; height:13px; border-radius:50%; background:#1ea476; border:1px solid #fff; cursor:pointer; padding:0;"></button>
+      </div>
+    </div>
+    <a href="/cutout_grass.glb" download="cutout_grass.glb" style="pointer-events:auto; text-decoration:none; cursor:pointer; background:rgba(76, 160, 62, 0.4); border:1px solid rgba(255,255,255,0.4); color:#fff; padding:2px 8px; border-radius:12px; font:11px monospace; backdrop-filter:blur(4px);">
+      📥 Download GLB (40 tris)
+    </a>
+  </div>
+  <span id="hudHelp">WASD — walk &nbsp;·&nbsp; SHIFT — sprint &nbsp;·&nbsp; SPACE — jump &nbsp;·&nbsp; P — toggle FX &nbsp;·&nbsp; V — walk &nbsp;·&nbsp; 🥽 VR: Quest Ready</span>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>

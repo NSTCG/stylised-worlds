@@ -1,0 +1,9 @@
+{
+  "name": "omp-testings",
+  "version": "1.0.0",
+  "type": "module",
+  "imports": {
+    "three": "./scratch/three.mjs",
+    "three/addons/*": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/*"
+  }
+}
