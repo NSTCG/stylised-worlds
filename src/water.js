@@ -49,6 +49,12 @@ function addWaterScroll(material) {
         `#include <dithering_fragment>
         // Soft shoreline alpha fade: fades water to transparent where it touches terrain
         gl_FragColor.a *= smoothstep(0.01, 0.55, vDepth);`
+      )
+      .replace(
+        'directLight.color *= ( directLight.visible && receiveShadow ) ? getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, vDirectionalShadowCoord[ i ] ) : 1.0;',
+        `float shadowVal = ( directLight.visible && receiveShadow ) ? getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, vDirectionalShadowCoord[ i ] ) : 1.0;
+        // Soften shadow cast on water: very low shadow intensity (translucent water in-scattering)
+        directLight.color *= mix(0.82, 1.0, shadowVal);`
       );
   };
 }

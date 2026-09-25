@@ -115,6 +115,7 @@ export function setupEnvironment(scene) {
       uDayFactor:  envUniforms.uDayFactor
     },
     vertexShader: `
+      precision highp float;
       varying vec3 vDir;
       void main() {
         vDir = position;
@@ -122,6 +123,7 @@ export function setupEnvironment(scene) {
       }
     `,
     fragmentShader: `
+      precision highp float;
       uniform float uTime;
       uniform vec3 uSunDir;
       uniform vec3 uMoonDir;
@@ -134,30 +136,29 @@ export function setupEnvironment(scene) {
 
       varying vec3 vDir;
 
-      // Fast 2D hash & value noise for clouds and stars
-      float hash2(vec2 p) {
-        return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+      // 100% stable VR-friendly hash without sine (never overflows in mediump/low-precision on Adreno/Quest)
+      float hash2_vr(vec2 p) {
+        p = fract(p * vec2(0.1031, 0.1030));
+        p += dot(p, p.yx + 33.33);
+        return fract((p.x + p.y) * p.x);
       }
 
-      float vnoise(vec2 p) {
+      float vnoise_vr(vec2 p) {
         vec2 i = floor(p);
         vec2 f = fract(p);
         vec2 u = f * f * (3.0 - 2.0 * f);
         return mix(
-          mix(hash2(i + vec2(0.0, 0.0)), hash2(i + vec2(1.0, 0.0)), u.x),
-          mix(hash2(i + vec2(0.0, 1.0)), hash2(i + vec2(1.0, 1.0)), u.x),
+          mix(hash2_vr(i), hash2_vr(i + vec2(1.0, 0.0)), u.x),
+          mix(hash2_vr(i + vec2(0.0, 1.0)), hash2_vr(i + vec2(1.0, 1.0)), u.x),
           u.y
         );
       }
 
-      float cloudFbm(vec2 p) {
+      float cloudFbm_vr(vec2 p) {
         float v = 0.0;
-        float a = 0.5;
-        for (int i = 0; i < 4; i++) {
-          v += a * vnoise(p);
-          p *= 2.15;
-          a *= 0.48;
-        }
+        v += 0.52 * vnoise_vr(p);
+        v += 0.30 * vnoise_vr(p * 2.08 + 1.25);
+        v += 0.18 * vnoise_vr(p * 4.15 + 2.80);
         return v;
       }
 
@@ -168,14 +169,14 @@ export function setupEnvironment(scene) {
         // 1. Sky Gradient (Zenith to Horizon)
         vec3 col = mix(uHorizon, uZenith, pow(max(h, 0.0), 0.52));
 
-        // 2. Stars (Visible at Night when looking upwards)
-        if (uDayFactor < 0.85 && d.y > 0.05) {
-          vec2 starCoord = d.xz / (d.y + 0.40) * 180.0;
-          float starVal = hash2(floor(starCoord));
-          if (starVal > 0.985) {
-            float twinkle = sin(uTime * 4.0 + starVal * 62.8) * 0.5 + 0.5;
-            float starIntensity = pow((starVal - 0.985) / 0.015, 2.0) * twinkle * (1.0 - uDayFactor) * smoothstep(0.05, 0.4, d.y);
-            col += vec3(0.85, 0.92, 1.0) * starIntensity * 1.8;
+        // 2. Stars (Visible at Night when looking upwards, VR safe)
+        if (uDayFactor < 0.85 && d.y > 0.08) {
+          vec2 starCoord = floor((d.xz / (d.y + 0.40)) * 140.0);
+          float starVal = hash2_vr(starCoord);
+          if (starVal > 0.982) {
+            float twinkle = sin(uTime * 3.5 + starVal * 31.4) * 0.5 + 0.5;
+            float starIntensity = pow((starVal - 0.982) / 0.018, 2.0) * twinkle * (1.0 - uDayFactor) * smoothstep(0.08, 0.40, d.y);
+            col += vec3(0.85, 0.92, 1.0) * starIntensity * 1.6;
           }
         }
 
@@ -194,26 +195,29 @@ export function setupEnvironment(scene) {
           float moonDisc = smoothstep(0.9988, 0.9996, mDot);
           // Subtle lunar surface contrast
           vec2 moonUv = d.xz * 12.0;
-          float moonDetail = 0.85 + 0.15 * vnoise(moonUv);
+          float moonDetail = 0.85 + 0.15 * vnoise_vr(moonUv);
           float moonHalo = pow(mDot, 400.0) * 0.9 + pow(mDot, 12.0) * 0.14;
           vec3 moonGlow = uMoonColor * (moonDisc * 2.2 * moonDetail + moonHalo);
           col += moonGlow * smoothstep(-0.15, 0.15, uMoonDir.y);
         }
 
-        // 5. Procedural Drifting Clouds
-        if (d.y > 0.02) {
-          // Perspective projection onto cloud plane
-          vec2 cloudPlane = (d.xz / (d.y + 0.18)) * 0.55;
-          vec2 windDrift = vec2(uTime * 0.012, uTime * 0.007);
+        // 5. Procedural Drifting Clouds (VR friendly low precision)
+        if (d.y > 0.04) {
+          // Perspective projection with safe denominator clamping
+          float py = max(d.y + 0.14, 0.22);
+          vec2 cloudPlane = (d.xz / py) * 0.48;
+
+          // Coordinate-safe drift wrapping to prevent overflow after long runtimes
+          vec2 windDrift = vec2(mod(uTime * 0.010, 512.0), mod(uTime * 0.006, 512.0));
           vec2 cloudCoord = cloudPlane + windDrift;
 
-          float density = cloudFbm(cloudCoord);
-          float cloudMask = smoothstep(0.48, 0.76, density) * smoothstep(0.02, 0.25, d.y);
+          float density = cloudFbm_vr(cloudCoord);
+          float cloudMask = smoothstep(0.46, 0.74, density) * smoothstep(0.04, 0.28, d.y);
 
-          if (cloudMask > 0.01) {
+          if (cloudMask > 0.005) {
             // Sun & Moon directional shading across cloud puffs
-            vec3 sunLitCloud = mix(uCloudColor * 0.65, uSunColor * 1.15, clamp(sDot * 0.5 + 0.5, 0.0, 1.0));
-            vec3 moonLitCloud = mix(vec3(0.12, 0.16, 0.25), uMoonColor * 0.70, clamp(mDot * 0.5 + 0.5, 0.0, 1.0));
+            vec3 sunLitCloud = mix(uCloudColor * 0.70, uSunColor * 1.10, clamp(sDot * 0.5 + 0.5, 0.0, 1.0));
+            vec3 moonLitCloud = mix(vec3(0.08, 0.12, 0.22), uMoonColor * 0.65, clamp(mDot * 0.5 + 0.5, 0.0, 1.0));
             vec3 activeCloudColor = mix(moonLitCloud, sunLitCloud, uDayFactor);
 
             // Cloud edge shading and puff density
@@ -256,20 +260,20 @@ export function setupEnvironment(scene) {
 
   // Reusable Color Buffers
   const cZenithDay   = new THREE.Color(0x5a94d8);
-  const cZenithSun   = new THREE.Color(0x3d2b63); // Sunset deep violet
+  const cZenithSun   = new THREE.Color(0x34466d); // Soft twilight sapphire (natural transition without purple/red cast)
   const cZenithNight = new THREE.Color(0x05122e); // Rich deep indigo blue
 
   const cHorizonDay   = new THREE.Color(0xe8d8be);
-  const cHorizonSun   = new THREE.Color(0xed6834); // Fiery golden amber
+  const cHorizonSun   = new THREE.Color(0xf0b26a); // Warm golden apricot/honey amber (toned down from harsh red)
   const cHorizonNight = new THREE.Color(0x091b3b); // Atmospheric midnight blue horizon
 
   const cSunDay = new THREE.Color(0xfff0cc);
-  const cSunSet = new THREE.Color(0xff7733);
+  const cSunSet = new THREE.Color(0xffbc66); // Golden honey sun (warm & golden, not red)
 
   // Cinematic moonlight blue
   const cMoonLight = new THREE.Color(0x4a82cf); // Rich environmental blue tint
   const cFogDay    = new THREE.Color(0xd9cdb8);
-  const cFogSun    = new THREE.Color(0x8a4d3b);
+  const cFogSun    = new THREE.Color(0xd2ad85); // Gentle golden hour mist (not brick red)
   const cFogNight  = new THREE.Color(0x08152e);
 
   function updateEnvironment(t, dt = 0.016) {
