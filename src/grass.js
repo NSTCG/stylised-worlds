@@ -145,9 +145,10 @@ function addGpuGrassShader(material, bladeHeight = 1.20) {
           float yGround = mapSample.r;
           vec3 tc = mapSample.gba;
           vTerrainColor = tc;
+          float greenness = clamp((tc.g - tc.r) / 0.18, 0.0, 1.0);
 
           // Full biome cutoff logic on GPU: grows on painted green grass, culled on road/sand/water/steep heights
-          bool discardBlade = (yGround < 0.02) || (yGround > 15.0) || (greenness <= 0.12) || (aGrassSeed.x > pow(greenness, 1.4)) || (radScale <= 0.001);
+          bool discardBlade = (yGround < 0.02) || (yGround > 15.0) || (greenness <= 0.04) || (aGrassSeed.x > pow(greenness, 1.4)) || (radScale <= 0.001);
 
           if (discardBlade) {
             transformed = vec3(0.0);

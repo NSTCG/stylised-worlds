@@ -26,7 +26,7 @@ export function fbm(x, y) {
 
 export const WATER_Y = 0;
 
-export function groundHeight(x, z) {
+export function proceduralHeight(x, z) {
   const r = Math.hypot(x, z);
   const flat = THREE.MathUtils.smoothstep(r, 8, 34); // keep clearing near camera flat
   const h = (fbm(x * 0.018 + 9.2, z * 0.018 + 4.7) - 0.4) * 9.0 * flat
@@ -34,6 +34,64 @@ export function groundHeight(x, z) {
   // island falloff: coast drops below sea level toward plane edge
   const coast = THREE.MathUtils.smoothstep(r, 120, 210);
   return h * (1 - coast) - coast * coast * 40;
+}
+
+export function groundHeight(x, z) {
+  // If live modified terrain data texture exists, sample live sculpted/painted heights!
+  const tex = _cachedTerrainDataTexture;
+  if (!tex || !tex.image || !tex.image.data) {
+    return proceduralHeight(x, z);
+  }
+
+  const minX = TERRAIN_BOUNDS.x, minZ = TERRAIN_BOUNDS.y;
+  const sizeX = TERRAIN_BOUNDS.z, sizeZ = TERRAIN_BOUNDS.w;
+  const u = (x - minX) / sizeX;
+  const v = (z - minZ) / sizeZ;
+  if (u < 0 || u > 1 || v < 0 || v > 1) {
+    return proceduralHeight(x, z);
+  }
+
+  const size = tex.image.width; // 512
+  const fx = u * (size - 1);
+  const fy = v * (size - 1);
+  const ix = Math.floor(fx);
+  const iy = Math.floor(fy);
+  const rx = fx - ix;
+  const ry = fy - iy;
+
+  const data = tex.image.data;
+  const i00 = (iy * size + ix) * 4;
+  const i10 = (iy * size + Math.min(size - 1, ix + 1)) * 4;
+  const i01 = (Math.min(size - 1, iy + 1) * size + ix) * 4;
+  const i11 = (Math.min(size - 1, iy + 1) * size + Math.min(size - 1, ix + 1)) * 4;
+
+  const h0 = data[i00] * (1 - rx) + data[i10] * rx;
+  const h1 = data[i01] * (1 - rx) + data[i11] * rx;
+  return h0 * (1 - ry) + h1 * ry;
+}
+
+export function getLiveTerrainBiome(x, z) {
+  const tex = _cachedTerrainDataTexture;
+  if (!tex || !tex.image || !tex.image.data) {
+    const y = groundHeight(x, z);
+    const col = terrainAlbedo(x, z, y);
+    return { y, r: col.r, g: col.g, b: col.b, greenness: (col.g - col.r) / 0.18 };
+  }
+  const minX = TERRAIN_BOUNDS.x, minZ = TERRAIN_BOUNDS.y;
+  const sizeX = TERRAIN_BOUNDS.z, sizeZ = TERRAIN_BOUNDS.w;
+  const u = THREE.MathUtils.clamp((x - minX) / sizeX, 0, 1);
+  const v = THREE.MathUtils.clamp((z - minZ) / sizeZ, 0, 1);
+  const size = tex.image.width;
+  const ix = Math.floor(u * (size - 1));
+  const iy = Math.floor(v * (size - 1));
+  const idx = (iy * size + ix) * 4;
+  const data = tex.image.data;
+  const y = data[idx + 0];
+  const r = data[idx + 1];
+  const g = data[idx + 2];
+  const b = data[idx + 3];
+  const greenness = (g - r) / 0.18;
+  return { y, r, g, b, greenness };
 }
 
 /* ---------------------------------------------------------- forest path */
@@ -110,7 +168,7 @@ export function getTerrainDataTexture(size = 512) {
     const z = minZ + iy * inv * sizeZ;
     for (let ix = 0; ix < size; ix++) {
       const x = minX + ix * inv * sizeX;
-      const y = groundHeight(x, z);
+      const y = proceduralHeight(x, z);
       const col = terrainAlbedo(x, z, y);
       const idx = (iy * size + ix) * 4;
       data[idx + 0] = y;

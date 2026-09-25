@@ -4,8 +4,10 @@ import {
   getGroundMesh, 
   TERRAIN_BOUNDS, 
   groundHeight, 
+  proceduralHeight,
   terrainAlbedo, 
   fbm,
+  vnoise,
   cGrassLush, 
   cGrassWarm, 
   cSand, 
@@ -13,6 +15,7 @@ import {
   cSeaShallow, 
   cRock 
 } from './terrain.js';
+import { rebuildTreesPCG } from './trees.js';
 
 export const editorState = {
   active: true,
@@ -275,10 +278,18 @@ export function setupTerrainEditor(scene, camera, domElement) {
   let pcgSeed = Math.random() * 1000;
 
   function pcgGenerateNewWorld() {
-    pcgSeed = Math.random() * 1000;
+    pcgSeed = Math.random() * 10000;
     const inv = 1 / (texSize - 1);
     const minX = TERRAIN_BOUNDS.x, minZ = TERRAIN_BOUNDS.y;
     const sizeX = TERRAIN_BOUNDS.z, sizeZ = TERRAIN_BOUNDS.w;
+
+    // Randomize noise parameters for distinctive island shapes
+    const scale1 = 0.012 + Math.random() * 0.014;
+    const scale2 = 0.045 + Math.random() * 0.045;
+    const amp1 = 8.0 + Math.random() * 7.0;
+    const amp2 = 1.4 + Math.random() * 1.6;
+    const warpAmt = 15.0 + Math.random() * 20.0;
+    const coastRadius = 110 + Math.random() * 30;
 
     // Procedural generation of heights & albedo
     for (let iy = 0; iy < texSize; iy++) {
@@ -286,11 +297,17 @@ export function setupTerrainEditor(scene, camera, domElement) {
       for (let ix = 0; ix < texSize; ix++) {
         const x = minX + ix * inv * sizeX;
         const r = Math.hypot(x, z);
-        const flat = THREE.MathUtils.smoothstep(r, 8, 34);
-        const h = (fbm(x * 0.018 + pcgSeed, z * 0.018 + pcgSeed * 0.7) - 0.4) * 10.0 * flat
-                + (fbm(x * 0.08 + 3.1, z * 0.08 + 7.7) - 0.5) * 1.8 * flat;
-        const coast = THREE.MathUtils.smoothstep(r, 115, 210);
-        const y = h * (1 - coast) - coast * coast * 40;
+        const flat = THREE.MathUtils.smoothstep(r, 7, 32);
+
+        // Domain warping for organic ridges & mountain ravines
+        const wx = x + fbm(x * 0.02 + pcgSeed, z * 0.02 + 13.5) * warpAmt;
+        const wz = z + fbm(z * 0.02 - 7.2, x * 0.02 + pcgSeed) * warpAmt;
+
+        const h = (fbm(wx * scale1 + pcgSeed, wz * scale1 + pcgSeed * 0.7) - 0.38) * amp1 * flat
+                + (fbm(x * scale2 + 3.1, z * scale2 + 7.7) - 0.5) * amp2 * flat;
+
+        const coast = THREE.MathUtils.smoothstep(r, coastRadius, coastRadius + 85);
+        const y = h * (1 - coast) - coast * coast * 42;
         const col = terrainAlbedo(x, z, y);
 
         const idx = (iy * texSize + ix) * 4;
@@ -318,6 +335,9 @@ export function setupTerrainEditor(scene, camera, domElement) {
     posAttr.needsUpdate = true;
     colAttr.needsUpdate = true;
     geo.computeVertexNormals();
+
+    // Auto pick up trees: rules ensure no trees in water, rock, or road!
+    rebuildTreesPCG();
   }
 
   function pcgResetDefault() {
@@ -329,7 +349,7 @@ export function setupTerrainEditor(scene, camera, domElement) {
       const z = minZ + iy * inv * sizeZ;
       for (let ix = 0; ix < texSize; ix++) {
         const x = minX + ix * inv * sizeX;
-        const y = groundHeight(x, z);
+        const y = proceduralHeight(x, z);
         const col = terrainAlbedo(x, z, y);
         const idx = (iy * texSize + ix) * 4;
         data[idx + 0] = y;
@@ -343,14 +363,14 @@ export function setupTerrainEditor(scene, camera, domElement) {
     const vCount = posAttr.count;
     for (let i = 0; i < vCount; i++) {
       const x = posAttr.getX(i), z = posAttr.getZ(i);
-      const y = groundHeight(x, z);
+      const y = proceduralHeight(x, z);
       const col = terrainAlbedo(x, z, y);
       posAttr.setY(i, y);
       colAttr.setXYZ(i, col.r, col.g, col.b);
     }
     posAttr.needsUpdate = true;
     colAttr.needsUpdate = true;
-    geo.computeVertexNormals();
+    rebuildTreesPCG();
   }
 
   // ---------------------------------------------------------- UI Binding
@@ -393,6 +413,7 @@ export function setupTerrainEditor(scene, camera, domElement) {
   }
 
   document.getElementById('pcgNewWorldBtn')?.addEventListener('click', pcgGenerateNewWorld);
+  document.getElementById('pcgAutoTreesBtn')?.addEventListener('click', rebuildTreesPCG);
   document.getElementById('pcgResetBtn')?.addEventListener('click', pcgResetDefault);
 
   updateBrushColor();

@@ -251,13 +251,18 @@
     </div>
 
     <!-- PCG Procedural Generation Tools -->
-    <div style="display:flex; gap:4px; margin-top:4px; margin-bottom:8px;">
-      <button id="pcgNewWorldBtn" class="action-btn" style="flex:1; padding:3px 4px; font-size:10px; background:rgba(60, 160, 220, 0.4);" title="Procedurally generate a new random island landscape">
-        🎲 PCG New
+    <div style="display:flex; flex-direction:column; gap:4px; margin-top:6px; margin-bottom:8px;">
+      <button id="pcgNewWorldBtn" class="action-btn" style="padding:5px 6px; font-size:11px; font-weight:bold; background:linear-gradient(135deg, rgba(60, 160, 220, 0.5), rgba(90, 210, 140, 0.5)); border-color:#7ef088;" title="Generate random PCG terrain with multi-octave noises">
+        🎲 Randomize PCG (Noises)
       </button>
-      <button id="pcgResetBtn" class="action-btn" style="flex:1; padding:3px 4px; font-size:10px; background:rgba(200, 70, 50, 0.4);" title="Reset terrain back to default procedural state">
-        ↺ Reset
-      </button>
+      <div style="display:flex; gap:4px;">
+        <button id="pcgAutoTreesBtn" class="action-btn" style="flex:1; padding:3px 4px; font-size:10px; background:rgba(76, 160, 62, 0.45);" title="Auto-place trees on painted green grass (no water/rock/road)">
+          🌲 Auto-Trees
+        </button>
+        <button id="pcgResetBtn" class="action-btn" style="flex:1; padding:3px 4px; font-size:10px; background:rgba(200, 70, 50, 0.4);" title="Reset terrain back to default procedural state">
+          ↺ Reset
+        </button>
+      </div>
     </div>
 
     <div style="height:1px; background:rgba(255,255,255,0.12); margin:8px 0;"></div>
