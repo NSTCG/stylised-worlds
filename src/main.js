@@ -87,6 +87,17 @@ if (timeCycleBtn) {
   });
 }
 
+// Hook Fog Density Slider
+const fogDensitySlider = document.getElementById('fogDensitySlider');
+if (fogDensitySlider) {
+  fogDensitySlider.addEventListener('input', (e) => {
+    const val = Number(e.target.value);
+    envConfig.fogBaseDensity = val * 0.001;
+    updateEnvironment(clock.getElapsedTime(), 0);
+    renderer.render(scene, camera);
+  });
+}
+
 /* ---------------------------------------------------------- main loop */
 const clock = new THREE.Clock();
 let frame = 0;

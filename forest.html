@@ -47,6 +47,11 @@
       <button id="timeCycleBtn" title="Toggle Auto Day/Night Cycle" style="cursor:pointer; background:rgba(255,255,255,0.15); border:1px solid rgba(255,255,255,0.3); color:#fff; border-radius:8px; font:10px monospace; padding:1px 5px;">⏯️</button>
     </div>
     <div style="display:flex; align-items:center; gap:5px; pointer-events:auto; background:rgba(0,0,0,0.5); padding:2px 8px; border-radius:12px; border:1px solid rgba(255,255,255,0.3); font:11px monospace;">
+      <span style="color:#d2e4f0;">🌫️ Fog:</span>
+      <input id="fogDensitySlider" type="range" min="2" max="35" step="1" value="12" style="width:50px; cursor:pointer; accent-color:#92c0e6;" title="Base Atmospheric Fog Density">
+      <span id="fogDensityVal" style="color:#fff; font-weight:bold; min-width:32px;">1.2%</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:5px; pointer-events:auto; background:rgba(0,0,0,0.5); padding:2px 8px; border-radius:12px; border:1px solid rgba(255,255,255,0.3); font:11px monospace;">
       <span style="color:#a8f09e;">🌾 Density:</span>
       <input id="grassDensitySlider" type="range" min="2" max="50" step="1" value="16" style="width:65px; cursor:pointer; accent-color:#4ca03e;">
       <span id="grassDensityVal" style="color:#fff; font-weight:bold; min-width:42px;">16/m²</span>

@@ -5,7 +5,8 @@ export const envConfig = {
   autoCycle: true,
   timeOfDay: 0.45, // 0.0 = midnight (00:00), 0.25 = sunrise (06:00), 0.50 = noon (12:00), 0.75 = sunset (18:00)
   sunIntensity: 2.35,
-  moonIntensity: 0.65
+  moonIntensity: 0.65,
+  fogBaseDensity: 0.0125 // Increased atmospheric fog (~3x denser than before, beautifully shrouds distant trees)
 };
 
 export const envUniforms = {
@@ -21,8 +22,8 @@ export const envUniforms = {
 };
 
 export function setupEnvironment(scene) {
-  // Fog (dynamically updated to match horizon color)
-  const fog = new THREE.FogExp2(0xd9cdb8, 0.0042);
+  // Fog (dynamically updated to match horizon color and atmospheric density)
+  const fog = new THREE.FogExp2(0xd9cdb8, envConfig.fogBaseDensity);
   scene.fog = fog;
 
   // Atmospheric Sky Dome with Sun, Moon, Stars, and Drifting Clouds
@@ -228,8 +229,29 @@ export function setupEnvironment(scene) {
     // Interpolate Sun Color & Corona
     envUniforms.uSunColor.value.copy(cSunDay).lerp(cSunSet, sunsetFactor);
 
-    // Dynamic Fog Color to seamlessly match horizon
-    fog.color.copy(cFogNight).lerp(cFogDay, dayFactor).lerp(cFogSun, sunsetFactor * 0.85);
+    // Dynamic Environmental Adaptive Fog
+    // 1. Fog Color: Seamlessly matches the horizon sky color, infused with celestial in-scattering
+    fog.color.copy(envUniforms.uHorizon.value);
+    if (sunsetFactor > 0.05) {
+      // Warm golden/amber in-scattering at sunset and dawn
+      fog.color.lerp(envUniforms.uSunColor.value, sunsetFactor * 0.35);
+    } else if (dayFactor < 0.25) {
+      // Cool silver lunar in-scattering under the moonlight
+      fog.color.lerp(envUniforms.uMoonColor.value, (1.0 - dayFactor) * 0.20);
+    }
+
+    // 2. Fog Density: Naturally adapts to the forest microclimate & time of day
+    // - Early morning ground dew & mist (peaks around 06:00 - 07:00 AM)
+    const morningMist = Math.exp(-Math.pow((envConfig.timeOfDay - 0.27) * 16.0, 2.0));
+    // - Nighttime cool ground radiation fog
+    const nightMist = Math.max(0.0, 1.0 - dayFactor);
+    // - Golden hour atmospheric aerosol haze
+    const sunsetHaze = sunsetFactor * 0.35;
+    // - Subtle organic living atmospheric breathing
+    const atmosphericBreathe = Math.sin(t * 0.12) * 0.05;
+
+    const envDensityMultiplier = 1.0 + 0.45 * morningMist + 0.35 * nightMist + 0.25 * sunsetHaze + atmosphericBreathe;
+    fog.density = envConfig.fogBaseDensity * envDensityMultiplier;
 
     // Directional Celestial Light (Transitions from Sun to Moon smoothly)
     if (sunElevation > -0.05) {
@@ -267,6 +289,12 @@ export function setupEnvironment(scene) {
       const icon = dayFactor > 0.4 ? '☀️' : (sunsetFactor > 0.4 ? '🌅' : '🌙');
       timeVal.textContent = `${icon} ${hh}:${mm}`;
     }
+
+    // Update HUD fog display if present
+    const fogVal = document.getElementById('fogDensityVal');
+    if (fogVal) {
+      fogVal.textContent = (fog.density * 100).toFixed(1) + '%';
+    }
   }
 
   // Initial update
@@ -277,6 +305,7 @@ export function setupEnvironment(scene) {
     hemi,
     ambient,
     sky,
+    fog,
     envConfig,
     updateEnvironment
   };
