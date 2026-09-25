@@ -8,15 +8,17 @@ export const grassConfig = {
   currentCount: 62000,
   density: 16, // blades / m²
   userRadius: 35.0, // meters
+  heightScale: 1.0, // global height scale factor
   currentColor: '#4ca03e'
 };
 
 export const grassUniforms = {
-  uPlayerPos:      { value: new THREE.Vector3(21, 5.5, 25) },
-  uGrassRadius:    { value: 35.0 },
-  uGrassColor:     { value: new THREE.Color(0x4ca03e) },
-  uTerrainDataMap: { value: null },
-  uTerrainBounds:  { value: TERRAIN_BOUNDS }
+  uPlayerPos:        { value: new THREE.Vector3(21, 5.5, 25) },
+  uGrassRadius:      { value: 35.0 },
+  uGrassHeightScale: { value: 1.0 },
+  uGrassColor:       { value: new THREE.Color(0x4ca03e) },
+  uTerrainDataMap:   { value: null },
+  uTerrainBounds:    { value: TERRAIN_BOUNDS }
 };
 
 /* ---------------------------------------------------------- Procedural Single Triangle Blade Geometry */
@@ -57,6 +59,7 @@ function addGpuGrassShader(material, bladeHeight = 1.20) {
     shader.uniforms.uTime = windUniforms.uTime;
     shader.uniforms.uPlayerPos = grassUniforms.uPlayerPos;
     shader.uniforms.uGrassRadius = grassUniforms.uGrassRadius;
+    shader.uniforms.uGrassHeightScale = grassUniforms.uGrassHeightScale;
     shader.uniforms.uGrassColor = grassUniforms.uGrassColor;
     shader.uniforms.uTerrainDataMap = grassUniforms.uTerrainDataMap;
     shader.uniforms.uTerrainBounds = grassUniforms.uTerrainBounds;
@@ -65,6 +68,7 @@ function addGpuGrassShader(material, bladeHeight = 1.20) {
       uniform float uTime;
       uniform vec3 uPlayerPos;
       uniform float uGrassRadius;
+      uniform float uGrassHeightScale;
       uniform vec3 uGrassColor;
       uniform sampler2D uTerrainDataMap;
       uniform vec4 uTerrainBounds;
@@ -153,11 +157,11 @@ function addGpuGrassShader(material, bladeHeight = 1.20) {
           } else {
             float h = clamp(position.y / ${f(bladeHeight)}, 0.0, 1.0);
 
-            // Scale blade dimensions based on greenness
+            // Scale blade dimensions based on greenness and global height scale
             float heightFactor = (0.28 + 0.72 * pow(greenness, 0.85)) * (0.85 + 0.40 * aGrassSeed.z);
             float widthFactor  = (0.35 + 0.65 * greenness) * (0.90 + 0.35 * aGrassSeed.y);
             transformed.xz *= widthFactor;
-            transformed.y *= heightFactor;
+            transformed.y *= heightFactor * uGrassHeightScale;
 
             // Natural initial yaw orientation: predominantly inclined with wind + organic variance
             float bladeYaw = 0.62 + (aGrassSeed.y - 0.5) * 1.35;
@@ -190,15 +194,15 @@ function addGpuGrassShader(material, bladeHeight = 1.20) {
             // Progressive spine bend curve: starts arching from lower-middle, max at tip
             float bendSpine = pow(h, 1.35);
 
-            float totalForward = (restingLean + dynamicPush) * bendSpine;
-            float lateralSway = (snoise(scrollCoord1 * 1.6 + vec2(5.4, 2.7)) * 0.14 + flutter * 0.65) * bendSpine;
+            float totalForward = (restingLean + dynamicPush) * bendSpine * uGrassHeightScale;
+            float lateralSway = (snoise(scrollCoord1 * 1.6 + vec2(5.4, 2.7)) * 0.14 + flutter * 0.65) * bendSpine * uGrassHeightScale;
 
             // Displace along wind vector and perpendicular vector
             transformed.x += wDir.x * totalForward + wPerp.x * lateralSway;
             transformed.z += wDir.y * totalForward + wPerp.y * lateralSway;
 
             // Realistic vertical dip: bending blades naturally pull down their tip
-            transformed.y -= (totalForward * totalForward + lateralSway * lateralSway) * 0.26;
+            transformed.y -= (totalForward * totalForward + lateralSway * lateralSway) * (0.26 * uGrassHeightScale);
 
             // Apply distance falloff
             transformed *= radScale;
@@ -335,6 +339,19 @@ export function buildGrass(scene) {
     updatePoolCount();
   }
 
+  function setGrassHeightScale(scale) {
+    const clamped = Math.max(0.2, Math.min(3.0, Number(scale)));
+    grassConfig.heightScale = clamped;
+    grassUniforms.uGrassHeightScale.value = clamped;
+
+    const label = document.getElementById('grassHeightVal');
+    if (label) label.textContent = `${clamped.toFixed(1)}x`;
+    const slider = document.getElementById('grassHeightSlider');
+    if (slider && Math.abs(Number(slider.value) - clamped) > 0.01) {
+      slider.value = clamped;
+    }
+  }
+
   function setGrassColor(colorHex) {
     grassConfig.currentColor = colorHex;
     grassUniforms.uGrassColor.value.set(colorHex);
@@ -360,6 +377,13 @@ export function buildGrass(scene) {
     });
   }
 
+  const heightSlider = document.getElementById('grassHeightSlider');
+  if (heightSlider) {
+    heightSlider.addEventListener('input', (e) => {
+      setGrassHeightScale(Number(e.target.value));
+    });
+  }
+
   // Hook UI Color Picker & Presets
   const colorPicker = document.getElementById('grassColorPicker');
   if (colorPicker) {
@@ -380,8 +404,22 @@ export function buildGrass(scene) {
     grassConfig,
     setGrassRadius,
     setGrassDensity,
+    setGrassHeightScale,
     setGrassColor
   };
+}
+
+export function setGrassHeightScale(scale) {
+  const clamped = Math.max(0.2, Math.min(3.0, Number(scale)));
+  grassConfig.heightScale = clamped;
+  grassUniforms.uGrassHeightScale.value = clamped;
+
+  const label = document.getElementById('grassHeightVal');
+  if (label) label.textContent = `${clamped.toFixed(1)}x`;
+  const slider = document.getElementById('grassHeightSlider');
+  if (slider && Math.abs(Number(slider.value) - clamped) > 0.01) {
+    slider.value = clamped;
+  }
 }
 
 /* ---------------------------------------------------------- update grass */

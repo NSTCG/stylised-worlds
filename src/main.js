@@ -5,7 +5,7 @@ import { createGround } from './terrain.js';
 import { createWater } from './water.js';
 import { createMountain } from './mountain.js';
 import { buildTrees } from './trees.js';
-import { buildGrass, updateGrass } from './grass.js';
+import { buildGrass, updateGrass, setGrassHeightScale } from './grass.js';
 import { buildRocks } from './rocks.js';
 import { createFireflies } from './fireflies.js';
 import { setupStats } from './stats.js';
@@ -13,6 +13,8 @@ import { setupPostProcessing } from './postfx.js';
 import { setupControls } from './controls.js';
 import { setupVR } from './vr.js';
 import { setGroundBlendIntensity } from './groundBlend.js';
+
+window.setGrassHeightScale = setGrassHeightScale;
 
 /* ---------------------------------------------------------- renderer & scene */
 const app = document.getElementById('app');
@@ -96,6 +98,29 @@ if (fogDensitySlider) {
     envConfig.fogBaseDensity = val * 0.001;
     updateEnvironment(clock.getElapsedTime(), 0);
     renderer.render(scene, camera);
+  });
+}
+
+// Hook Side Panel Collapsing & Visibility
+const sidePanel = document.getElementById('sideControlsPanel');
+const collapseSidePanelBtn = document.getElementById('collapseSidePanelBtn');
+const toggleSideBtn = document.getElementById('toggleSideBtn');
+
+if (collapseSidePanelBtn && sidePanel) {
+  collapseSidePanelBtn.addEventListener('click', () => {
+    sidePanel.classList.toggle('collapsed');
+    collapseSidePanelBtn.textContent = sidePanel.classList.contains('collapsed') ? '+' : '—';
+  });
+}
+
+if (toggleSideBtn && sidePanel) {
+  toggleSideBtn.addEventListener('click', () => {
+    if (sidePanel.classList.contains('collapsed')) {
+      sidePanel.classList.remove('collapsed');
+      if (collapseSidePanelBtn) collapseSidePanelBtn.textContent = '—';
+    } else {
+      sidePanel.classList.toggle('hidden');
+    }
   });
 }
 

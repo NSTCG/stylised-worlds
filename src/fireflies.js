@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { groundHeight } from './terrain.js';
+import { groundHeight, pathFactor, terrainAlbedo } from './terrain.js';
 
 export const FIREFLY_N = 3600;
 
@@ -7,13 +7,45 @@ export function createFireflies(scene) {
   const fireflyBase = new Float32Array(FIREFLY_N * 3);
   const fireflyPhase = new Float32Array(FIREFLY_N);
 
-  for (let i = 0; i < FIREFLY_N; i++) {
+  let placed = 0;
+  let attempts = 0;
+  const maxAttempts = FIREFLY_N * 40;
+
+  // Place fireflies strictly over lush grass areas
+  while (placed < FIREFLY_N && attempts < maxAttempts) {
+    attempts++;
     const a = Math.random() * Math.PI * 2;
-    const r = 4 + Math.sqrt(Math.random()) * 165;
+    const r = 2.5 + Math.sqrt(Math.random()) * 85; // within grass radius
     const x = Math.cos(a) * r, z = Math.sin(a) * r;
     const gh = groundHeight(x, z);
-    fireflyBase.set([x, Math.max(gh, 0.2) + 0.4 + Math.random() * 3.8, z], i * 3);
-    fireflyPhase[i] = Math.random() * Math.PI * 2;
+
+    // Filter out water (gh < 0.5), barren mountain summits (gh > 14.0), and paths
+    if (gh < 0.5 || gh > 14.0) continue;
+    if (pathFactor(x, z) > 0.22) continue;
+
+    // Check terrain biome greenness
+    const tc = terrainAlbedo(x, z, gh);
+    const greenness = (tc.g - tc.r) / 0.18;
+    if (greenness < 0.22) continue;
+
+    // Hover directly above grass canopy (0.35m to 1.70m above ground surface)
+    const hoverH = gh + 0.35 + Math.random() * 1.35;
+    fireflyBase.set([x, hoverH, z], placed * 3);
+    fireflyPhase[placed] = Math.random() * Math.PI * 2;
+    placed++;
+  }
+
+  // Fallback in the rare case max attempts reached: duplicate valid points with slight jitter
+  while (placed < FIREFLY_N) {
+    const srcIdx = Math.floor(Math.random() * Math.max(1, placed));
+    const jx = (Math.random() - 0.5) * 1.5;
+    const jz = (Math.random() - 0.5) * 1.5;
+    const x = fireflyBase[srcIdx * 3] + jx;
+    const z = fireflyBase[srcIdx * 3 + 2] + jz;
+    const gh = groundHeight(x, z);
+    fireflyBase.set([x, Math.max(gh + 0.35, fireflyBase[srcIdx * 3 + 1]), z], placed * 3);
+    fireflyPhase[placed] = Math.random() * Math.PI * 2;
+    placed++;
   }
 
   const fireflyGeo = new THREE.BufferGeometry();
@@ -46,7 +78,7 @@ export function createFireflies(scene) {
 
   const fireflyUniforms = { uTime: { value: 0 } };
 
-  mat.onBeforeCompile = (shader) => {
+    mat.onBeforeCompile = (shader) => {
     shader.uniforms.uTime = fireflyUniforms.uTime;
     shader.vertexShader = `
       attribute float aPhase;
@@ -54,9 +86,9 @@ export function createFireflies(scene) {
     ` + shader.vertexShader.replace(
       '#include <begin_vertex>',
       `#include <begin_vertex>
-      transformed.x += sin(uTime * 0.5 + aPhase) * 1.6;
-      transformed.y += sin(uTime * 0.7 + aPhase * 2.1) * 0.7;
-      transformed.z += cos(uTime * 0.4 + aPhase * 1.6) * 1.6;`
+      transformed.x += sin(uTime * 0.45 + aPhase) * 1.1;
+      transformed.y += sin(uTime * 0.65 + aPhase * 2.1) * 0.28;
+      transformed.z += cos(uTime * 0.38 + aPhase * 1.6) * 1.1;`
     );
   };
 

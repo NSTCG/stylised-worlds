@@ -7,6 +7,8 @@
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden; background: #0c1208; }
   #app { position: fixed; inset: 0; }
+
+  /* Minimal Bottom HUD */
   .hud {
     position: fixed; left: 16px; bottom: 14px; z-index: 2;
     font: 12px/1.5 ui-monospace, Consolas, monospace;
@@ -14,6 +16,127 @@
     pointer-events: none; user-select: none;
   }
   .hud b { color: #eaf2df; font-size: 13px; letter-spacing: .06em; }
+
+  /* Right Side Controls Panel */
+  .side-panel {
+    position: fixed; top: 12px; right: 16px; z-index: 20;
+    width: 242px;
+    background: rgba(10, 16, 12, 0.88);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 14px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+    padding: 10px 14px;
+    font: 11.5px/1.4 ui-monospace, Consolas, monospace;
+    color: #eaf2df;
+    user-select: none;
+    box-sizing: border-box;
+    transition: all 0.2s ease-in-out;
+  }
+  .side-panel.collapsed #sidePanelBody {
+    display: none;
+  }
+  .side-panel.hidden {
+    display: none;
+  }
+  .panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 6px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    margin-bottom: 8px;
+  }
+  .ctrl-group {
+    margin-bottom: 8px;
+  }
+  .ctrl-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 3px;
+    font-size: 11px;
+  }
+  .ctrl-label {
+    color: rgba(235, 245, 225, 0.85);
+    font-weight: 500;
+  }
+  .ctrl-val {
+    font-weight: bold;
+    font-size: 11px;
+  }
+  .ctrl-slider {
+    width: 100%;
+    height: 4px;
+    appearance: none;
+    background: rgba(255, 255, 255, 0.18);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+    margin: 2px 0 0 0;
+    display: block;
+  }
+  .ctrl-slider::-webkit-slider-thumb {
+    appearance: none;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #7ef088;
+    cursor: pointer;
+    box-shadow: 0 0 4px rgba(0,0,0,0.6);
+  }
+  .ctrl-slider::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #7ef088;
+    cursor: pointer;
+  }
+  .mini-btn {
+    cursor: pointer;
+    background: rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: #fff;
+    border-radius: 6px;
+    font: 10px monospace;
+    padding: 1px 4px;
+  }
+  .mini-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+  }
+  .icon-btn {
+    cursor: pointer;
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.7);
+    font: bold 14px monospace;
+    padding: 0 4px;
+    line-height: 1;
+    border-radius: 4px;
+  }
+  .icon-btn:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.15);
+  }
+  .action-btn {
+    display: block;
+    cursor: pointer;
+    background: rgba(255, 255, 255, 0.18);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    color: #fff;
+    padding: 4px 8px;
+    border-radius: 10px;
+    font: 11px monospace;
+    backdrop-filter: blur(4px);
+    transition: background 0.15s;
+    text-align: center;
+    box-sizing: border-box;
+    width: 100%;
+  }
+  .action-btn:hover {
+    background: rgba(255, 255, 255, 0.28);
+  }
 </style>
 </head>
 <body>
@@ -31,55 +154,112 @@
   </div>
 </div>
 
+<!-- Right Side Controls Panel (Sliders on side) -->
+<div id="sideControlsPanel" class="side-panel">
+  <div class="panel-header">
+    <div style="display:flex; align-items:center; gap:6px;">
+      <span style="font-size:13px;">⚙️</span>
+      <b style="color:#eaf2df; letter-spacing:0.04em;">CONTROLS</b>
+    </div>
+    <button id="collapseSidePanelBtn" title="Collapse Panel" class="icon-btn">—</button>
+  </div>
+
+  <div id="sidePanelBody" class="panel-body">
+    <!-- Time of Day -->
+    <div class="ctrl-group">
+      <div class="ctrl-row">
+        <span class="ctrl-label">☀️ Time of Day</span>
+        <div style="display:flex; align-items:center; gap:5px;">
+          <span id="timeOfDayVal" class="ctrl-val" style="color:#ffd57e;">☀️ 10:48</span>
+          <button id="timeCycleBtn" title="Toggle Auto Day/Night Cycle" class="mini-btn">⏯️</button>
+        </div>
+      </div>
+      <input id="timeOfDaySlider" type="range" min="0" max="100" step="1" value="45" class="ctrl-slider" style="accent-color:#ffd57e;" title="Scrub Time of Day">
+    </div>
+
+    <!-- Atmospheric Fog -->
+    <div class="ctrl-group">
+      <div class="ctrl-row">
+        <span class="ctrl-label">🌫️ Atmospheric Fog</span>
+        <span id="fogDensityVal" class="ctrl-val" style="color:#92c0e6;">1.2%</span>
+      </div>
+      <input id="fogDensitySlider" type="range" min="2" max="35" step="1" value="12" class="ctrl-slider" style="accent-color:#92c0e6;" title="Base Fog Density">
+    </div>
+
+    <!-- Grass Height Scale -->
+    <div class="ctrl-group">
+      <div class="ctrl-row">
+        <span class="ctrl-label">📏 Grass Height</span>
+        <span id="grassHeightVal" class="ctrl-val" style="color:#7ef088;">1.0x</span>
+      </div>
+      <input id="grassHeightSlider" type="range" min="0.3" max="2.5" step="0.1" value="1.0" class="ctrl-slider" style="accent-color:#7ef088;" title="Grass Height Scale Factor">
+    </div>
+
+    <!-- Grass Density -->
+    <div class="ctrl-group">
+      <div class="ctrl-row">
+        <span class="ctrl-label">🌾 Blade Density</span>
+        <span id="grassDensityVal" class="ctrl-val" style="color:#a8f09e;">16/m²</span>
+      </div>
+      <input id="grassDensitySlider" type="range" min="2" max="50" step="1" value="16" class="ctrl-slider" style="accent-color:#4ca03e;" title="Blade Density">
+    </div>
+
+    <!-- Grass Radius -->
+    <div class="ctrl-group">
+      <div class="ctrl-row">
+        <span class="ctrl-label">⭕ Render Radius</span>
+        <span id="grassRadiusVal" class="ctrl-val" style="color:#7ef088;">35m</span>
+      </div>
+      <input id="grassRadiusSlider" type="range" min="15" max="65" step="5" value="35" class="ctrl-slider" style="accent-color:#7ef088;" title="Grass Render Radius">
+    </div>
+
+    <!-- Ground Blend -->
+    <div class="ctrl-group">
+      <div class="ctrl-row">
+        <span class="ctrl-label">⛰️ Ground Blend</span>
+        <span id="groundBlendVal" class="ctrl-val" style="color:#a8f09e;">65%</span>
+      </div>
+      <input id="groundBlendSlider" type="range" min="0" max="1" step="0.05" value="0.65" class="ctrl-slider" style="accent-color:#4ca03e;" title="Ground Blend Factor">
+    </div>
+
+    <!-- Blade Color & Swatches -->
+    <div class="ctrl-group">
+      <div class="ctrl-row">
+        <span class="ctrl-label">🎨 Blade Tint</span>
+        <div style="display:flex; align-items:center; gap:5px;">
+          <input type="color" id="grassColorPicker" value="#4ca03e" style="width:20px; height:18px; border:none; border-radius:4px; cursor:pointer; padding:0; background:none;">
+          <div style="display:flex; gap:3px;">
+            <button class="colorPreset" data-color="#4ca03e" title="Lush Green" style="width:13px; height:13px; border-radius:50%; background:#4ca03e; border:1px solid #fff; cursor:pointer; padding:0;"></button>
+            <button class="colorPreset" data-color="#c5af45" title="Golden Meadow" style="width:13px; height:13px; border-radius:50%; background:#c5af45; border:1px solid #fff; cursor:pointer; padding:0;"></button>
+            <button class="colorPreset" data-color="#256220" title="Deep Pine" style="width:13px; height:13px; border-radius:50%; background:#256220; border:1px solid #fff; cursor:pointer; padding:0;"></button>
+            <button class="colorPreset" data-color="#af572e" title="Autumn Glow" style="width:13px; height:13px; border-radius:50%; background:#af572e; border:1px solid #fff; cursor:pointer; padding:0;"></button>
+            <button class="colorPreset" data-color="#1ea476" title="Emerald Fantasy" style="width:13px; height:13px; border-radius:50%; background:#1ea476; border:1px solid #fff; cursor:pointer; padding:0;"></button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="height:1px; background:rgba(255,255,255,0.12); margin:8px 0;"></div>
+
+    <!-- Quick Action Buttons -->
+    <div style="display:flex; flex-direction:column; gap:6px;">
+      <button id="modeBtn" class="action-btn">🚶 Walk Mode (V)</button>
+      <button id="fxBtn" class="action-btn" style="background:rgba(230, 140, 30, 0.45);">⚡ Quest Mode: FX OFF (P)</button>
+      <a href="/cutout_grass.glb" download="cutout_grass.glb" class="action-btn" style="text-decoration:none; background:rgba(76, 160, 62, 0.4);">
+        📥 Download GLB (40 tris)
+      </a>
+    </div>
+  </div>
+</div>
+
+<!-- Minimal Unobstructed Bottom HUD -->
 <div class="hud">
   <div style="display:flex; align-items:center; gap:8px; margin-bottom:3px;">
     <b>DENSE FOREST</b>
     <span id="hudFps" style="color:#7ef088; font-weight:bold; background:rgba(0,0,0,0.45); padding:1px 6px; border-radius:8px;">-- FPS</span>
-    <button id="modeBtn" style="pointer-events:auto; cursor:pointer; background:rgba(255,255,255,0.2); border:1px solid rgba(255,255,255,0.4); color:#fff; padding:2px 8px; border-radius:12px; font:11px monospace; backdrop-filter:blur(4px);">
-      🚶 Walk Mode (V)
+    <button id="toggleSideBtn" style="pointer-events:auto; cursor:pointer; background:rgba(255,255,255,0.18); border:1px solid rgba(255,255,255,0.35); color:#eaf2df; padding:2px 8px; border-radius:12px; font:11px monospace; backdrop-filter:blur(4px);">
+      ⚙️ Controls
     </button>
-    <button id="fxBtn" style="pointer-events:auto; cursor:pointer; background:rgba(230, 140, 30, 0.5); border:1px solid rgba(255,255,255,0.4); color:#fff; padding:2px 8px; border-radius:12px; font:11px monospace; backdrop-filter:blur(4px);">
-      ⚡ Quest Mode: FX OFF (P)
-    </button>
-    <div style="display:flex; align-items:center; gap:5px; pointer-events:auto; background:rgba(0,0,0,0.5); padding:2px 8px; border-radius:12px; border:1px solid rgba(255,255,255,0.3); font:11px monospace;">
-      <span id="timeOfDayVal" style="color:#ffd57e; font-weight:bold; min-width:65px;">☀️ 10:48</span>
-      <input id="timeOfDaySlider" type="range" min="0" max="100" step="1" value="45" style="width:60px; cursor:pointer; accent-color:#ffd57e;" title="Scrub Time of Day">
-      <button id="timeCycleBtn" title="Toggle Auto Day/Night Cycle" style="cursor:pointer; background:rgba(255,255,255,0.15); border:1px solid rgba(255,255,255,0.3); color:#fff; border-radius:8px; font:10px monospace; padding:1px 5px;">⏯️</button>
-    </div>
-    <div style="display:flex; align-items:center; gap:5px; pointer-events:auto; background:rgba(0,0,0,0.5); padding:2px 8px; border-radius:12px; border:1px solid rgba(255,255,255,0.3); font:11px monospace;">
-      <span style="color:#d2e4f0;">🌫️ Fog:</span>
-      <input id="fogDensitySlider" type="range" min="2" max="35" step="1" value="12" style="width:50px; cursor:pointer; accent-color:#92c0e6;" title="Base Atmospheric Fog Density">
-      <span id="fogDensityVal" style="color:#fff; font-weight:bold; min-width:32px;">1.2%</span>
-    </div>
-    <div style="display:flex; align-items:center; gap:5px; pointer-events:auto; background:rgba(0,0,0,0.5); padding:2px 8px; border-radius:12px; border:1px solid rgba(255,255,255,0.3); font:11px monospace;">
-      <span style="color:#a8f09e;">🌾 Density:</span>
-      <input id="grassDensitySlider" type="range" min="2" max="50" step="1" value="16" style="width:65px; cursor:pointer; accent-color:#4ca03e;">
-      <span id="grassDensityVal" style="color:#fff; font-weight:bold; min-width:42px;">16/m²</span>
-    </div>
-    <div style="display:flex; align-items:center; gap:5px; pointer-events:auto; background:rgba(0,0,0,0.5); padding:2px 8px; border-radius:12px; border:1px solid rgba(255,255,255,0.3); font:11px monospace;">
-      <span style="color:#7ef088;">⭕ Radius:</span>
-      <input id="grassRadiusSlider" type="range" min="15" max="65" step="5" value="35" style="width:55px; cursor:pointer; accent-color:#7ef088;">
-      <span id="grassRadiusVal" style="color:#fff; font-weight:bold; min-width:32px;">35m</span>
-    </div>
-    <div style="display:flex; align-items:center; gap:5px; pointer-events:auto; background:rgba(0,0,0,0.5); padding:2px 8px; border-radius:12px; border:1px solid rgba(255,255,255,0.3); font:11px monospace;">
-      <span style="color:#a8f09e;">⛰️ Blend:</span>
-      <input id="groundBlendSlider" type="range" min="0" max="1" step="0.05" value="0.65" style="width:50px; cursor:pointer; accent-color:#4ca03e;">
-      <span id="groundBlendVal" style="color:#fff; font-weight:bold; min-width:32px;">65%</span>
-    </div>
-    <div style="display:flex; align-items:center; gap:5px; pointer-events:auto; background:rgba(0,0,0,0.5); padding:2px 8px; border-radius:12px; border:1px solid rgba(255,255,255,0.3); font:11px monospace;">
-      <span style="color:#7ef088;">🎨 Color:</span>
-      <input type="color" id="grassColorPicker" value="#4ca03e" style="width:20px; height:18px; border:none; border-radius:4px; cursor:pointer; padding:0; background:none;">
-      <div style="display:flex; gap:3px;">
-        <button class="colorPreset" data-color="#4ca03e" title="Lush Green" style="width:13px; height:13px; border-radius:50%; background:#4ca03e; border:1px solid #fff; cursor:pointer; padding:0;"></button>
-        <button class="colorPreset" data-color="#c5af45" title="Golden Meadow" style="width:13px; height:13px; border-radius:50%; background:#c5af45; border:1px solid #fff; cursor:pointer; padding:0;"></button>
-        <button class="colorPreset" data-color="#256220" title="Deep Pine" style="width:13px; height:13px; border-radius:50%; background:#256220; border:1px solid #fff; cursor:pointer; padding:0;"></button>
-        <button class="colorPreset" data-color="#af572e" title="Autumn Glow" style="width:13px; height:13px; border-radius:50%; background:#af572e; border:1px solid #fff; cursor:pointer; padding:0;"></button>
-        <button class="colorPreset" data-color="#1ea476" title="Emerald Fantasy" style="width:13px; height:13px; border-radius:50%; background:#1ea476; border:1px solid #fff; cursor:pointer; padding:0;"></button>
-      </div>
-    </div>
-    <a href="/cutout_grass.glb" download="cutout_grass.glb" style="pointer-events:auto; text-decoration:none; cursor:pointer; background:rgba(76, 160, 62, 0.4); border:1px solid rgba(255,255,255,0.4); color:#fff; padding:2px 8px; border-radius:12px; font:11px monospace; backdrop-filter:blur(4px);">
-      📥 Download GLB (40 tris)
-    </a>
   </div>
   <span id="hudHelp">WASD — walk &nbsp;·&nbsp; SHIFT — sprint &nbsp;·&nbsp; SPACE — jump &nbsp;·&nbsp; P — toggle FX &nbsp;·&nbsp; V — walk &nbsp;·&nbsp; 🥽 VR: Quest Ready</span>
 </div>
