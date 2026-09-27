@@ -350,6 +350,8 @@ export function compressTexture(originalTexture, maxDim = 1024, mimeType = 'imag
   // Defaulting to SRGBColorSpace corrupts normal map tangent vectors and PBR data!
   newTexture.colorSpace = originalTexture.colorSpace !== undefined ? originalTexture.colorSpace : THREE.NoColorSpace;
 
+  newTexture.userData = { ...originalTexture.userData, mimeType, quality };
+
   newTexture.generateMipmaps = true;
   newTexture.minFilter = THREE.LinearMipmapLinearFilter;
   newTexture.magFilter = THREE.LinearFilter;

@@ -20,6 +20,7 @@ import { setupTransformManager, selectObject } from './transformManager.js';
 import { setupAssetBrowser, toggleAssetBrowser } from './assetBrowser.js';
 import { getAssetById } from './assetCatalog.js';
 import { openModelPreviewModal } from './modelPreviewModal.js';
+import { buildWhisperingValley } from './whisperingValleyScene.js';
 
 window.setGrassHeightScale = setGrassHeightScale;
 
@@ -334,6 +335,20 @@ window.saveLevelToStorage = () => saveLevelToStorage(_glbApi);
 window.loadLevelFromStorage = () => loadLevelFromStorage(_glbApi);
 window.buildLevelJson = () => buildLevelJson(_glbApi);
 window.envConfig = envConfig;
+
+// Hook Whispering Valley Level 1 quick map
+const whisperingValleyBtn = document.getElementById('whisperingValleyBtn');
+if (whisperingValleyBtn) {
+  whisperingValleyBtn.addEventListener('click', () => {
+    buildWhisperingValley(scene, camera, controls);
+  });
+}
+window.buildWhisperingValley = () => buildWhisperingValley(scene, camera, controls);
+
+// Auto-build Whispering Valley scene on launch for immediate testing
+setTimeout(() => {
+  buildWhisperingValley(scene, camera, controls);
+}, 600);
 
 // Hook Side Panel Collapsing & Visibility
 const sidePanel = document.getElementById('sideControlsPanel');

@@ -68,6 +68,7 @@ const server = http.createServer((req, res) => {
 
   if (reqPath === '/api/assets') {
     const assetsDir = path.join(ROOT_DIR, 'AssetsTest', 'Assets');
+    const optDir = path.join(ROOT_DIR, 'AssetsTest', 'Optimized');
     fs.readdir(assetsDir, (err, files) => {
       if (err) {
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -82,18 +83,49 @@ const server = http.createServer((req, res) => {
         if (/torii|portal|bridge|well|lamp post/i.test(name)) category = 'Structure';
         else if (/tree|flower|plant|rock/i.test(name)) category = 'Nature';
         else if (/sprite/i.test(name)) category = 'Character';
+
+        let hasOptimized = false;
+        let optSizeMB = null;
+        const optFile = path.join(optDir, f);
+        if (fs.existsSync(optFile)) {
+          hasOptimized = true;
+          const optStats = fs.statSync(optFile);
+          optSizeMB = (optStats.size / 1024 / 1024).toFixed(2);
+        }
+
         return {
           id: name.toLowerCase().replace(/\s+/g, '_'),
           name: name.charAt(0).toUpperCase() + name.slice(1),
           filename: f,
           url: `./AssetsTest/Assets/${encodeURIComponent(f)}`,
+          optimizedUrl: hasOptimized ? `./AssetsTest/Optimized/${encodeURIComponent(f)}` : null,
+          hasOptimized,
           sizeBytes: stats.size,
           sizeMB: (stats.size / 1024 / 1024).toFixed(1),
+          optSizeMB,
           category
         };
       });
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(list));
+    });
+    return;
+  }
+
+  if (req.method === 'POST' && reqPath === '/api/save-optimized') {
+    const urlObj = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+    const filename = urlObj.searchParams.get('name') || 'model.glb';
+    const optDir = path.join(ROOT_DIR, 'AssetsTest', 'Optimized');
+    if (!fs.existsSync(optDir)) fs.mkdirSync(optDir, { recursive: true });
+    const targetFile = path.join(optDir, path.basename(filename));
+    const chunks = [];
+    req.on('data', chunk => chunks.push(chunk));
+    req.on('end', () => {
+      const buffer = Buffer.concat(chunks);
+      fs.writeFileSync(targetFile, buffer);
+      console.log(`✅ Saved optimized GLB: ${targetFile} (${(buffer.length / 1024).toFixed(1)} KB)`);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, file: targetFile, sizeBytes: buffer.length }));
     });
     return;
   }

@@ -28,14 +28,14 @@ let _wireframeActive = false;
 let _autoRotate = true;
 let _showingOptimized = false;
 
-// Default optimization settings
+// Default optimization settings (Defaulted to Quest 10% & 512 WebP for peak performance)
 const _optSettings = {
-  simplifyRatio: 0.45,
+  simplifyRatio: 0.10,
   targetError: 0.02,
   recomputeNormals: false,
-  maxTextureRes: 1024,
+  maxTextureRes: 512,
   textureFormat: 'webp',
-  textureQuality: 0.82,
+  textureQuality: 0.75,
   stripNormalMap: false,
   optimizeMaterials: true
 };
@@ -148,8 +148,8 @@ function _createModalDom() {
         <div style="margin-bottom:12px;">
           <div style="font-size:10px; font-weight:bold; color:rgba(235,245,225,0.85); margin-bottom:5px;">⚡ QUICK OPTIMIZATION PRESETS:</div>
           <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:5px;">
-            <button class="opt-preset-btn" data-preset="quest">🥽 Quest / Mobile (25%)</button>
-            <button class="opt-preset-btn active" data-preset="balanced">⚖️ Balanced (45%)</button>
+            <button class="opt-preset-btn active" data-preset="quest">🥽 Quest / Ultra-Light (10%)</button>
+            <button class="opt-preset-btn" data-preset="balanced">⚖️ Balanced (45%)</button>
             <button class="opt-preset-btn" data-preset="high">💎 High Detail (75%)</button>
             <button class="opt-preset-btn" data-preset="original">📦 Keep Original (100%)</button>
           </div>
@@ -159,12 +159,12 @@ function _createModalDom() {
         <div class="prev-section-card">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
             <span style="font-weight:bold; color:#7ef088; font-size:11px;">📐 MESHOPT SIMPLIFICATION</span>
-            <span id="simplifyRatioVal" style="color:#7ef088; font-weight:bold;">45%</span>
+            <span id="simplifyRatioVal" style="color:#7ef088; font-weight:bold;">10%</span>
           </div>
-          <input id="simplifyRatioSlider" type="range" min="10" max="100" step="5" value="45" class="ctrl-slider" style="accent-color:#7ef088;">
+          <input id="simplifyRatioSlider" type="range" min="5" max="100" step="5" value="10" class="ctrl-slider" style="accent-color:#7ef088;">
           <div style="display:flex; justify-content:space-between; font-size:9.5px; color:rgba(235,245,225,0.6); margin-top:2px;">
             <span>Target Triangles: <b id="targetTrisVal" style="color:#fff;">--</b></span>
-            <span>Error: <b>0.05</b></span>
+            <span>Error: <b>0.02</b></span>
           </div>
           <label style="display:flex; align-items:center; gap:6px; font-size:10px; color:rgba(235,245,225,0.8); margin-top:6px; cursor:pointer;">
             <input id="recomputeNormalsCheck" type="checkbox"> Recompute smooth vertex normals
@@ -180,8 +180,8 @@ function _createModalDom() {
               Max Resolution:
               <select id="maxTexResSelect" class="prev-select">
                 <option value="256">256 px (Ultra Light)</option>
-                <option value="512">512 px (Mobile VR)</option>
-                <option value="1024" selected>1024 px (Recommended)</option>
+                <option value="512" selected>512 px (Mobile VR / Web)</option>
+                <option value="1024">1024 px (Recommended)</option>
                 <option value="2048">2048 px (High Res)</option>
                 <option value="Infinity">Original</option>
               </select>
@@ -199,9 +199,9 @@ function _createModalDom() {
 
           <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px;">
             <span style="font-size:10px; color:rgba(235,245,225,0.8);">Texture Quality</span>
-            <span id="texQualityVal" style="font-size:10px; font-weight:bold; color:#ffd57e;">82%</span>
+            <span id="texQualityVal" style="font-size:10px; font-weight:bold; color:#ffd57e;">75%</span>
           </div>
-          <input id="texQualitySlider" type="range" min="30" max="95" step="5" value="82" class="ctrl-slider" style="accent-color:#ffd57e;">
+          <input id="texQualitySlider" type="range" min="30" max="95" step="5" value="75" class="ctrl-slider" style="accent-color:#ffd57e;">
 
           <label style="display:flex; align-items:center; gap:6px; font-size:10px; color:rgba(235,245,225,0.8); margin-top:6px; cursor:pointer;">
             <input id="stripNormalCheck" type="checkbox"> Drop normal maps for flat/stylized look
@@ -473,7 +473,7 @@ function _applyPreset(presetKey) {
   const qSlider = _modalEl.querySelector('#texQualitySlider');
 
   if (presetKey === 'quest') {
-    _optSettings.simplifyRatio = 0.25;
+    _optSettings.simplifyRatio = 0.10;
     _optSettings.maxTextureRes = 512;
     _optSettings.textureFormat = 'webp';
     _optSettings.textureQuality = 0.75;
