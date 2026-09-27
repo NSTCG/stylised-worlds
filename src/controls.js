@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { groundHeight } from './terrain.js';
+import { rotateGhost, scaleGhost, cancelPlacement, placementState } from './assetsManager.js';
+import { saveLevelToStorage } from './levelSerializer.js';
 
 export function setupControls(camera, domElement, onTogglePostProcessing) {
   const controls = new OrbitControls(camera, domElement);
@@ -8,7 +10,7 @@ export function setupControls(camera, domElement, onTogglePostProcessing) {
   controls.enableDamping = true;
   controls.dampingFactor = 0.06;
   controls.minDistance = 5;
-  controls.maxDistance = 140;
+  controls.maxDistance = 180;
   controls.maxPolarAngle = Math.PI * 0.49;
   controls.autoRotate = false;
   controls.autoRotateSpeed = 0.45;
@@ -23,7 +25,9 @@ export function setupControls(camera, domElement, onTogglePostProcessing) {
   domElement.addEventListener('contextmenu', (e) => e.preventDefault());
 
   let isWalkMode = false;
-  const keys = { w: false, a: false, s: false, d: false, shift: false, space: false };
+  let isFlyMode = false;
+
+  const keys = { w: false, a: false, s: false, d: false, shift: false, space: false, c: false };
   const player = {
     pos: new THREE.Vector3(21, 5.5, 25),
     yaw: -2.3,
@@ -34,15 +38,32 @@ export function setupControls(camera, domElement, onTogglePostProcessing) {
   };
 
   window.addEventListener('keydown', (e) => {
+    // Quick Save: Ctrl + S
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+      e.preventDefault();
+      saveLevelToStorage(window.envConfig);
+      return;
+    }
+
     const k = e.key.toLowerCase();
     if (k === 'w' || k === 'arrowup') keys.w = true;
     if (k === 'a' || k === 'arrowleft') keys.a = true;
     if (k === 's' || k === 'arrowdown') keys.s = true;
     if (k === 'd' || k === 'arrowright') keys.d = true;
+    if (k === 'c') keys.c = true;
     if (e.key === 'Shift') keys.shift = true;
     if (e.key === ' ') { keys.space = true; e.preventDefault(); }
     if (k === 'v') toggleMode();
+    if (k === 'f') toggleFlyMode();
     if (k === 'p') onTogglePostProcessing?.();
+
+    // Prop placement shortcuts
+    if (placementState.active) {
+      if (k === 'r') rotateGhost(Math.PI / 8);
+      if (k === '[') scaleGhost(0.9);
+      if (k === ']') scaleGhost(1.1);
+      if (e.key === 'Escape') cancelPlacement();
+    }
   });
 
   window.addEventListener('keyup', (e) => {
@@ -51,9 +72,43 @@ export function setupControls(camera, domElement, onTogglePostProcessing) {
     if (k === 'a' || k === 'arrowleft') keys.a = false;
     if (k === 's' || k === 'arrowdown') keys.s = false;
     if (k === 'd' || k === 'arrowright') keys.d = false;
+    if (k === 'c') keys.c = false;
     if (e.key === 'Shift') keys.shift = false;
     if (e.key === ' ') keys.space = false;
   });
+
+  // Wheel to rotate prop during placement
+  domElement.addEventListener('wheel', (e) => {
+    if (placementState.active) {
+      e.preventDefault();
+      rotateGhost(e.deltaY > 0 ? 0.2 : -0.2);
+    }
+  }, { passive: false });
+
+  function setFlyMode(fly) {
+    isFlyMode = fly;
+    const flyBtn = document.getElementById('flyModeBtn');
+    const help = document.getElementById('hudHelp');
+
+    if (isFlyMode) {
+      if (!isWalkMode) setWalkMode(true);
+      if (flyBtn) {
+        flyBtn.textContent = '🕊️ Fly Mode: ON (F)';
+        flyBtn.style.background = 'rgba(56, 189, 248, 0.55)';
+      }
+      if (help) help.innerHTML = 'WASD — 3D fly &nbsp;·&nbsp; SPACE — ascend &nbsp;·&nbsp; C/SHIFT — descend &nbsp;·&nbsp; F — walk &nbsp;·&nbsp; 🥽 VR: Ready';
+    } else {
+      if (flyBtn) {
+        flyBtn.textContent = '🕊️ Fly Mode (F)';
+        flyBtn.style.background = 'rgba(255, 255, 255, 0.18)';
+      }
+      if (help) help.innerHTML = 'WASD — walk &nbsp;·&nbsp; SHIFT — sprint &nbsp;·&nbsp; SPACE — jump &nbsp;·&nbsp; F — fly &nbsp;·&nbsp; V — orbit &nbsp;·&nbsp; 🥽 VR: Ready';
+    }
+  }
+
+  function toggleFlyMode() {
+    setFlyMode(!isFlyMode);
+  }
 
   function setWalkMode(walk) {
     isWalkMode = walk;
@@ -68,16 +123,17 @@ export function setupControls(camera, domElement, onTogglePostProcessing) {
       player.yaw = Math.atan2(-dir.x, -dir.z);
       player.pitch = Math.asin(THREE.MathUtils.clamp(dir.y, -0.85, 0.85));
       if (btn) { btn.textContent = '🔭 Orbit Mode (V)'; btn.style.background = 'rgba(76, 160, 62, 0.5)'; }
-      if (help) help.innerHTML = 'WASD — walk &nbsp;·&nbsp; SHIFT — sprint &nbsp;·&nbsp; SPACE — jump &nbsp;·&nbsp; mouse — look &nbsp;·&nbsp; V — orbit &nbsp;·&nbsp; 🥽 VR: Ready';
+      if (help) help.innerHTML = 'WASD — walk &nbsp;·&nbsp; SHIFT — sprint &nbsp;·&nbsp; SPACE — jump &nbsp;·&nbsp; F — fly &nbsp;·&nbsp; V — orbit';
       domElement.requestPointerLock?.();
     } else {
+      isFlyMode = false;
       document.exitPointerLock?.();
       controls.enabled = true;
       const dir = new THREE.Vector3();
       camera.getWorldDirection(dir);
       controls.target.copy(camera.position).addScaledVector(dir, 16);
       if (btn) { btn.textContent = '🚶 Walk Mode (V)'; btn.style.background = 'rgba(255,255,255,0.2)'; }
-      if (help) help.innerHTML = 'WASD — pan &nbsp;·&nbsp; drag — orbit &nbsp;·&nbsp; wheel — zoom &nbsp;·&nbsp; V — walk &nbsp;·&nbsp; 🥽 VR: Ready';
+      if (help) help.innerHTML = 'WASD — pan &nbsp;·&nbsp; drag — orbit &nbsp;·&nbsp; wheel — zoom &nbsp;·&nbsp; V — walk &nbsp;·&nbsp; F — fly &nbsp;·&nbsp; 🥽 VR: Ready';
     }
   }
 
@@ -86,6 +142,7 @@ export function setupControls(camera, domElement, onTogglePostProcessing) {
   }
 
   document.getElementById('modeBtn')?.addEventListener('click', toggleMode);
+  document.getElementById('flyModeBtn')?.addEventListener('click', toggleFlyMode);
 
   let isMouseDown = false;
   domElement.addEventListener('pointerdown', () => {
@@ -106,30 +163,55 @@ export function setupControls(camera, domElement, onTogglePostProcessing) {
     if (isWalkMode) {
       const moveX = (keys.d ? 1 : 0) - (keys.a ? 1 : 0);
       const moveZ = (keys.s ? 1 : 0) - (keys.w ? 1 : 0);
-      if (moveX !== 0 || moveZ !== 0) {
-        const spd = (keys.shift ? 11.5 : 5.4) * dt;
-        const fwd = new THREE.Vector3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw));
-        const rgt = new THREE.Vector3(Math.cos(player.yaw), 0, -Math.sin(player.yaw));
-        const delta = fwd.multiplyScalar(-moveZ).addScaledVector(rgt, moveX).normalize().multiplyScalar(spd);
-        player.pos.add(delta);
-        const r = Math.hypot(player.pos.x, player.pos.z);
-        if (r > 200) player.pos.setLength(200);
+
+      if (isFlyMode) {
+        // 🕊️ Desktop Fly Mode: Full 3D Flight
+        const fwd = new THREE.Vector3();
+        camera.getWorldDirection(fwd);
+        const rgt = new THREE.Vector3().crossVectors(fwd, new THREE.Vector3(0, 1, 0)).normalize();
+        const flySpd = (keys.shift ? 28 : 14) * dt;
+
+        if (moveX !== 0 || moveZ !== 0) {
+          player.pos.addScaledVector(fwd, -moveZ * flySpd);
+          player.pos.addScaledVector(rgt, moveX * flySpd);
+        }
+
+        // Ascend / Descend
+        if (keys.space) player.pos.y += flySpd;
+        if (keys.c) player.pos.y -= flySpd;
+
+        const gh = groundHeight(player.pos.x, player.pos.z);
+        player.pos.y = Math.max(gh + 0.3, Math.min(85, player.pos.y));
+
+        camera.position.copy(player.pos);
+        camera.rotation.set(player.pitch, player.yaw, 0, 'YXZ');
+      } else {
+        // 🚶 Ground Walk Mode
+        if (moveX !== 0 || moveZ !== 0) {
+          const spd = (keys.shift ? 11.5 : 5.4) * dt;
+          const fwd = new THREE.Vector3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw));
+          const rgt = new THREE.Vector3(Math.cos(player.yaw), 0, -Math.sin(player.yaw));
+          const delta = fwd.multiplyScalar(-moveZ).addScaledVector(rgt, moveX).normalize().multiplyScalar(spd);
+          player.pos.add(delta);
+          const r = Math.hypot(player.pos.x, player.pos.z);
+          if (r > 200) player.pos.setLength(200);
+        }
+        const gh = groundHeight(player.pos.x, player.pos.z);
+        const floorY = Math.max(gh, -0.4) + player.eyeHeight;
+        player.jumpVel -= 25 * dt;
+        player.pos.y += player.jumpVel * dt;
+        if (player.pos.y <= floorY) {
+          player.pos.y = floorY;
+          player.jumpVel = 0;
+          player.onGround = true;
+        }
+        if (keys.space && player.onGround) {
+          player.jumpVel = 8.5;
+          player.onGround = false;
+        }
+        camera.position.copy(player.pos);
+        camera.rotation.set(player.pitch, player.yaw, 0, 'YXZ');
       }
-      const gh = groundHeight(player.pos.x, player.pos.z);
-      const floorY = Math.max(gh, -0.4) + player.eyeHeight;
-      player.jumpVel -= 25 * dt;
-      player.pos.y += player.jumpVel * dt;
-      if (player.pos.y <= floorY) {
-        player.pos.y = floorY;
-        player.jumpVel = 0;
-        player.onGround = true;
-      }
-      if (keys.space && player.onGround) {
-        player.jumpVel = 8.5;
-        player.onGround = false;
-      }
-      camera.position.copy(player.pos);
-      camera.rotation.set(player.pitch, player.yaw, 0, 'YXZ');
     } else {
       // In Orbit mode, WASD smoothly navigates the camera / orbit target
       const moveX = (keys.d ? 1 : 0) - (keys.a ? 1 : 0);
@@ -153,7 +235,10 @@ export function setupControls(camera, domElement, onTogglePostProcessing) {
     controls,
     player,
     isWalkMode: () => isWalkMode,
+    isFlyMode: () => isFlyMode,
     setWalkMode,
+    setFlyMode,
+    toggleFlyMode,
     toggleMode,
     updatePlayer
   };

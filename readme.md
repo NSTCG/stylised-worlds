@@ -39,10 +39,17 @@ python -m http.server 8000
 ```
 Open **`http://localhost:8000/forest.html`** in your desktop browser or Meta Quest Browser.
 
-### Meta Quest Launch via ADB
-```bash
-node launch_quest.js
-```
+### Meta Quest Push & Launch via ADB
+- **Quick Push (Instant re-launch on Quest)**:
+  Double-click [`push_to_quest.bat`](file:///c:/Dev/ompTestings/push_to_quest.bat) or run:
+  ```powershell
+  .\push_to_quest.ps1
+  ```
+- **Start Dev Server + Launch on Quest**:
+  Double-click [`launch_quest.bat`](file:///c:/Dev/ompTestings/launch_quest.bat) or run:
+  ```bash
+  node launch_quest.js
+  ```
 
 ---
 

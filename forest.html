@@ -232,6 +232,15 @@
       <button class="brush-btn" data-brush="rock" title="Rugged Cliff Rock">
         <span>🪨</span>Rock
       </button>
+      <button class="brush-btn" data-brush="treeConifer" title="Place a conifer at cursor (custom colors)">
+        <span>🌲</span>Conifer
+      </button>
+      <button class="brush-btn" data-brush="treeBroad" title="Place a broadleaf tree at cursor">
+        <span>🍃</span>Broadleaf
+      </button>
+      <button class="brush-btn" data-brush="glb" title="Place selected GLB asset at cursor">
+        <span>📦</span>GLB
+      </button>
     </div>
 
     <!-- Brush Radius & Strength -->
@@ -263,6 +272,115 @@
           ↺ Reset
         </button>
       </div>
+    </div>
+
+    <!-- Tree Customization & Palette Colors -->
+    <div class="ctrl-group" style="margin-top:6px;">
+      <div class="ctrl-row">
+        <span class="ctrl-label">🌲 TREE CUSTOMIZER</span>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; margin-top:2px;">
+        <label style="font-size:9.5px; color:rgba(235,245,225,0.7);">Trunk Base
+          <input id="treeColorBarkBottom" type="color" value="#362112" style="width:20px; height:18px; border:none; border-radius:4px; cursor:pointer; padding:0; background:none;">
+        </label>
+        <label style="font-size:9.5px; color:rgba(235,245,225,0.7);">Trunk Top
+          <input id="treeColorBarkTop" type="color" value="#785437" style="width:20px; height:18px; border:none; border-radius:4px; cursor:pointer; padding:0; background:none;">
+        </label>
+        <label style="font-size:9.5px; color:rgba(235,245,225,0.7);">Pine Leaf Base
+          <input id="treeColorLeafBottom" type="color" value="#1a421c" style="width:20px; height:18px; border:none; border-radius:4px; cursor:pointer; padding:0; background:none;">
+        </label>
+        <label style="font-size:9.5px; color:rgba(235,245,225,0.7);">Pine Leaf Top
+          <input id="treeColorLeafTop" type="color" value="#5ea83c" style="width:20px; height:18px; border:none; border-radius:4px; cursor:pointer; padding:0; background:none;">
+        </label>
+        <label style="font-size:9.5px; color:rgba(235,245,225,0.7);">Oak Leaf Base
+          <input id="treeColorBroadBottom" type="color" value="#24521c" style="width:20px; height:18px; border:none; border-radius:4px; cursor:pointer; padding:0; background:none;">
+        </label>
+        <label style="font-size:9.5px; color:rgba(235,245,225,0.7);">Oak Leaf Crown
+          <input id="treeColorBroadTop" type="color" value="#7cc643" style="width:20px; height:18px; border:none; border-radius:4px; cursor:pointer; padding:0; background:none;">
+        </label>
+      </div>
+      <div style="display:flex; gap:3px; margin-top:5px;" id="treeColorPresets">
+        <button class="mini-btn tree-preset" data-preset="summer" title="Lush Summer">🌲 Summer</button>
+        <button class="mini-btn tree-preset" data-preset="autumn" title="Golden Autumn">🍂 Autumn</button>
+        <button class="mini-btn tree-preset" data-preset="sakura" title="Cherry Blossom">🌸 Sakura</button>
+        <button class="mini-btn tree-preset" data-preset="mystic" title="Mystic Fantasy">🔮 Mystic</button>
+        <button class="mini-btn tree-preset" data-preset="frost" title="Alpine Frost">❄️ Frost</button>
+      </div>
+    </div>
+
+    <!-- Custom Tree Samplers -->
+    <div class="ctrl-group" style="margin-top:6px;">
+      <div class="ctrl-row">
+        <span class="ctrl-label">🌸 CUSTOM TREE SAMPLERS</span>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:4px; margin-top:3px;">
+        <div style="display:flex; gap:4px;">
+          <button id="sampleConiferOnlyBtn" class="action-btn" style="flex:1; padding:3px 4px; font-size:10px; background:rgba(40,110,60,0.5);" title="Sample conifers/pines exclusively across high ridges">
+            🌲 Pines Only
+          </button>
+          <button id="sampleBroadOnlyBtn" class="action-btn" style="flex:1; padding:3px 4px; font-size:10px; background:rgba(80,140,50,0.5);" title="Sample broadleaf trees exclusively in lush valleys">
+            🌳 Oaks Only
+          </button>
+        </div>
+        <div style="display:flex; gap:4px;">
+          <button id="eraseTreesBrushBtn" class="action-btn" style="flex:1; padding:3px 4px; font-size:10px; background:rgba(180,60,60,0.45);" title="Click terrain to erase trees within brush radius">
+            🧹 Erase Trees
+          </button>
+          <button id="sampleGroveBrushBtn" class="action-btn" style="flex:1; padding:3px 4px; font-size:10px; background:rgba(160,70,160,0.45);" title="Click terrain to plant a grove cluster of 6 trees">
+            🌸 Plant Grove
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- GLB Assets & Fantasy Props -->
+    <div class="ctrl-group" style="margin-top:6px;">
+      <div class="ctrl-row">
+        <span class="ctrl-label">📦 GLB & FANTASY PROPS</span>
+      </div>
+      <button id="sideOpenAssetBrowserBtn" class="action-btn" style="padding:6px 8px; font-size:11px; font-weight:bold; background:linear-gradient(135deg, rgba(56, 189, 248, 0.45), rgba(126, 240, 136, 0.45)); border-color:#7ef088; margin-bottom:6px;" title="Browse all 14 3D models in AssetsTest/Assets, preview in 3D, and configure Meshopt & Texture compression">
+        🔍 3D Models & Optimizer (14 Assets)
+      </button>
+      <div style="font-size:9.5px; color:rgba(235,245,225,0.7); margin-bottom:2px;">Built-in Props & Custom Models:</div>
+      <div id="glbAssetList" style="display:flex; flex-wrap:wrap; gap:3px; margin-top:2px;"></div>
+      <label style="display:block; margin-top:5px; font-size:9.5px; color:rgba(235,245,225,0.7);">
+        📂 Load Custom .GLB File:
+        <input id="glbFileInput" type="file" accept=".glb,.gltf" multiple style="font-size:10px; width:100%; margin-top:2px;">
+      </label>
+      <div class="ctrl-row" style="margin-top:4px;">
+        <span class="ctrl-label">Scale</span>
+        <span id="glbScaleVal" class="ctrl-val">1.0×</span>
+      </div>
+      <input id="glbScaleSlider" type="range" min="0.2" max="6" step="0.1" value="1" class="ctrl-slider" style="accent-color:#f59e0b;">
+      <div class="ctrl-row">
+        <span class="ctrl-label">Yaw (R / Wheel)</span>
+        <span id="glbYawVal" class="ctrl-val">0°</span>
+      </div>
+      <input id="glbYawSlider" type="range" min="-180" max="180" step="5" value="0" class="ctrl-slider" style="accent-color:#f59e0b;">
+    </div>
+
+    <!-- Save / Load Level (Storage & File) -->
+    <div class="ctrl-group" style="margin-top:6px;">
+      <div class="ctrl-row">
+        <span class="ctrl-label">💾 LEVEL PERSISTENCE</span>
+      </div>
+      <div style="display:flex; gap:4px; margin-top:2px;">
+        <button id="quickSaveStorageBtn" class="action-btn" style="flex:1; padding:4px 4px; font-size:10px; background:rgba(30,140,80,0.55);" title="Save whole world level to browser storage (Ctrl+S)">
+          💾 Quick Save
+        </button>
+        <button id="quickLoadStorageBtn" class="action-btn" style="flex:1; padding:4px 4px; font-size:10px; background:rgba(60,130,220,0.5);" title="Restore level from browser storage">
+          📂 Quick Load
+        </button>
+      </div>
+      <div style="display:flex; gap:4px; margin-top:4px;">
+        <button id="saveLevelBtn" class="action-btn" style="flex:1; padding:3px 4px; font-size:9.5px; background:rgba(255,255,255,0.15);" title="Download level as JSON file">
+          ⬇️ Export JSON
+        </button>
+        <button id="loadLevelBtn" class="action-btn" style="flex:1; padding:3px 4px; font-size:9.5px; background:rgba(255,255,255,0.15);" title="Upload a saved level JSON file">
+          ⬆️ Import JSON
+        </button>
+      </div>
+      <input id="levelFileInput" type="file" accept=".json,application/json" style="display:none;">
     </div>
 
     <div style="height:1px; background:rgba(255,255,255,0.12); margin:8px 0;"></div>
@@ -325,6 +443,22 @@
       <input id="groundBlendSlider" type="range" min="0" max="1" step="0.05" value="0.65" class="ctrl-slider" style="accent-color:#4ca03e;" title="Ground Blend Factor">
     </div>
 
+    <!-- Dynamic Water Shoreline Fade & Foam -->
+    <div class="ctrl-group">
+      <div class="ctrl-row">
+        <span class="ctrl-label">🌊 Shoreline Fade</span>
+        <span id="waterFadeVal" class="ctrl-val" style="color:#38bdf8;">0.55m</span>
+      </div>
+      <input id="waterFadeSlider" type="range" min="0.1" max="2.0" step="0.05" value="0.55" class="ctrl-slider" style="accent-color:#38bdf8;" title="Dynamic Water Shoreline Fade Distance">
+    </div>
+    <div class="ctrl-group">
+      <div class="ctrl-row">
+        <span class="ctrl-label">🫧 Shoreline Foam</span>
+        <span id="waterFoamVal" class="ctrl-val" style="color:#7ef088;">0.32m</span>
+      </div>
+      <input id="waterFoamSlider" type="range" min="0.05" max="1.5" step="0.05" value="0.32" class="ctrl-slider" style="accent-color:#7ef088;" title="Dynamic Shoreline Foam Width">
+    </div>
+
     <!-- Blade Color & Swatches -->
     <div class="ctrl-group">
       <div class="ctrl-row">
@@ -347,6 +481,7 @@
     <!-- Quick Action Buttons -->
     <div style="display:flex; flex-direction:column; gap:6px;">
       <button id="modeBtn" class="action-btn">🚶 Walk Mode (V)</button>
+      <button id="flyModeBtn" class="action-btn" style="background:rgba(56, 189, 248, 0.45); border-color:#38bdf8;">🕊️ Fly Mode (F)</button>
       <button id="fxBtn" class="action-btn" style="background:rgba(230, 140, 30, 0.45);">⚡ Quest Mode: FX OFF (P)</button>
       <a href="/cutout_grass.glb" download="cutout_grass.glb" class="action-btn" style="text-decoration:none; background:rgba(76, 160, 62, 0.4);">
         📥 Download GLB (40 tris)
@@ -360,11 +495,14 @@
   <div style="display:flex; align-items:center; gap:8px; margin-bottom:3px;">
     <b>DENSE FOREST & LEVEL EDITOR</b>
     <span id="hudFps" style="color:#7ef088; font-weight:bold; background:rgba(0,0,0,0.45); padding:1px 6px; border-radius:8px;">-- FPS</span>
+    <button id="openAssetBrowserBtn" style="pointer-events:auto; cursor:pointer; background:linear-gradient(135deg, rgba(56, 189, 248, 0.35), rgba(126, 240, 136, 0.35)); border:1px solid #7ef088; color:#fff; padding:2px 10px; border-radius:12px; font:11px monospace; backdrop-filter:blur(4px); font-weight:bold;" title="Open 3D Models Library, 3D Preview Inspector & Optimizer">
+      📦 3D Models & Optimizer
+    </button>
     <button id="toggleSideBtn" style="pointer-events:auto; cursor:pointer; background:rgba(255,255,255,0.18); border:1px solid rgba(255,255,255,0.35); color:#eaf2df; padding:2px 8px; border-radius:12px; font:11px monospace; backdrop-filter:blur(4px);">
       🛠️ Editor Controls
     </button>
   </div>
-  <span id="hudHelp">🖱️ Left: Draw on terrain &nbsp;·&nbsp; Right: Look around &nbsp;·&nbsp; Middle: Pan &nbsp;·&nbsp; Wheel: Zoom &nbsp;·&nbsp; V: Walk Mode</span>
+  <span id="hudHelp">🖱️ Left: Draw / Place &nbsp;·&nbsp; Right: Look &nbsp;·&nbsp; W/E/R: Move/Rotate/Scale &nbsp;·&nbsp; G: Snap &nbsp;·&nbsp; V: Walk &nbsp;·&nbsp; F: Fly &nbsp;·&nbsp; Ctrl+S: Quick Save</span>
 </div>
 
 <script type="importmap">

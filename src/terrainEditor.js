@@ -15,11 +15,13 @@ import {
   cSeaShallow, 
   cRock 
 } from './terrain.js';
-import { rebuildTreesPCG } from './trees.js';
+import { rebuildTreesPCG, placeTreeAt, sampleTreeCluster, eraseTreesInRadius } from './trees.js';
+import { placementState, updateGhostPosition, confirmPlacement } from './assetsManager.js';
 
 export const editorState = {
   active: true,
-  brushType: 'grass', // 'grass' | 'sand' | 'road' | 'water' | 'raise' | 'lower' | 'smooth' | 'rock'
+  brushType: 'grass', // 'grass'|'sand'|'road'|'water'|'raise'|'lower'|'smooth'|'rock'|'tree_stamp'|'tree_cluster'|'tree_eraser'
+  treeType: 'conifer', // 'conifer'|'broad'
   brushRadius: 10.0,
   brushStrength: 0.45,
   isPainting: false,
@@ -30,10 +32,11 @@ export const editorState = {
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
 
-export function setupTerrainEditor(scene, camera, domElement) {
+export function setupTerrainEditor(scene, camera, domElement, glbHandle = null) {
   const tex = getTerrainDataTexture();
   const groundMesh = getGroundMesh();
   if (!groundMesh || !tex) return null;
+  const placeGlbAt = glbHandle ? glbHandle.placeAt : null;
 
   const data = tex.image.data;
   const texSize = tex.image.width; // 512
@@ -65,7 +68,10 @@ export function setupTerrainEditor(scene, camera, domElement) {
     raise: 0xff6b4a,
     lower: 0x818cf8,
     smooth: 0xe2e8f0,
-    rock: 0x94a3b8
+    rock: 0x94a3b8,
+    treeConifer: 0x5ea83c,
+    treeBroad: 0x7cc643,
+    glb: 0xf59e0b
   };
 
   function updateBrushColor() {
@@ -248,21 +254,34 @@ export function setupTerrainEditor(scene, camera, domElement) {
   }
 
   // ---------------------------------------------------------- Mouse Event Listeners
-  // Left Click (button 0): Draw
-  // Right Click (button 2): Orbit / Look around (handled by OrbitControls)
-  // Middle Click (button 1): Pan (handled by OrbitControls)
   domElement.addEventListener('pointerdown', (e) => {
     if (e.button === 0) { // Left click
       const hit = raycastTerrain(e);
       if (hit) {
-        editorState.isPainting = true;
-        applyBrushAt(editorState.hitPoint.x, editorState.hitPoint.z);
+        if (placementState.active) {
+          confirmPlacement(editorState.hitPoint.x, editorState.hitPoint.z);
+        } else if (editorState.brushType === 'tree_stamp' || editorState.brushType === 'treeConifer' || editorState.brushType === 'treeBroad') {
+          const type = editorState.brushType === 'treeBroad' ? 'broad' : (editorState.treeType || 'conifer');
+          placeTreeAt(editorState.hitPoint.x, editorState.hitPoint.z, type);
+        } else if (editorState.brushType === 'tree_cluster') {
+          sampleTreeCluster(editorState.hitPoint.x, editorState.hitPoint.z, 6, 12.0, editorState.treeType || 'conifer');
+        } else if (editorState.brushType === 'tree_eraser') {
+          eraseTreesInRadius(editorState.hitPoint.x, editorState.hitPoint.z, editorState.brushRadius);
+        } else if (editorState.brushType === 'glb' && placeGlbAt) {
+          placeGlbAt(editorState.hitPoint);
+        } else {
+          editorState.isPainting = true;
+          applyBrushAt(editorState.hitPoint.x, editorState.hitPoint.z);
+        }
       }
     }
   });
 
   window.addEventListener('pointermove', (e) => {
-    raycastTerrain(e);
+    const hit = raycastTerrain(e);
+    if (placementState.active && hit) {
+      updateGhostPosition(editorState.hitPoint.x, editorState.hitPoint.z);
+    }
     if (editorState.isPainting && editorState.hasHit) {
       applyBrushAt(editorState.hitPoint.x, editorState.hitPoint.z);
     }
@@ -370,6 +389,7 @@ export function setupTerrainEditor(scene, camera, domElement) {
     }
     posAttr.needsUpdate = true;
     colAttr.needsUpdate = true;
+    geo.computeVertexNormals();
     rebuildTreesPCG();
   }
 
@@ -423,6 +443,7 @@ export function setupTerrainEditor(scene, camera, domElement) {
     setBrush,
     pcgGenerateNewWorld,
     pcgResetDefault,
-    brushRing
+    brushRing,
+    applyBrushAt
   };
 }

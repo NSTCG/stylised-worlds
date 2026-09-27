@@ -1,29 +1,108 @@
 import * as THREE from 'three';
 import { windUniforms } from './wind.js';
 import { envUniforms } from './environment.js';
-import { groundHeight, WATER_Y } from './terrain.js';
+import { getTerrainDataTexture, TERRAIN_BOUNDS, WATER_Y } from './terrain.js';
+
+export const waterUniforms = {
+  uTime: windUniforms.uTime,
+  uDayFactor: envUniforms.uDayFactor,
+  uMoonDir: envUniforms.uMoonDir,
+  uMoonColor: envUniforms.uMoonColor,
+  uHorizon: envUniforms.uHorizon,
+  uTerrainTex: { value: null },
+  uTerrainBounds: { value: TERRAIN_BOUNDS },
+  uWaterY: { value: WATER_Y },
+  uShoreFadeDist: { value: 0.55 },
+  uShoreFoamWidth: { value: 0.32 }
+};
 
 function addWaterScroll(material) {
   const prev = material.onBeforeCompile || null;
   material.onBeforeCompile = (shader) => {
     if (prev) prev(shader);
-    shader.uniforms.uTime = windUniforms.uTime;
-    shader.uniforms.uDayFactor = envUniforms.uDayFactor;
-    shader.uniforms.uMoonDir = envUniforms.uMoonDir;
-    shader.uniforms.uMoonColor = envUniforms.uMoonColor;
-    shader.uniforms.uHorizon = envUniforms.uHorizon;
 
-    shader.vertexShader = `
-      attribute float aDepth;
-      varying float vDepth;
-    ` + shader.vertexShader.replace(
-      '#include <begin_vertex>',
-      `#include <begin_vertex>
-      vDepth = aDepth;`
-    );
-    shader.fragmentShader = `
-      varying float vDepth;
-    ` + shader.fragmentShader
+    // Bind uniforms to live waterUniforms
+    shader.uniforms.uTime = waterUniforms.uTime;
+    shader.uniforms.uDayFactor = waterUniforms.uDayFactor;
+    shader.uniforms.uMoonDir = waterUniforms.uMoonDir;
+    shader.uniforms.uMoonColor = waterUniforms.uMoonColor;
+    shader.uniforms.uHorizon = waterUniforms.uHorizon;
+    shader.uniforms.uTerrainTex = waterUniforms.uTerrainTex;
+    shader.uniforms.uTerrainBounds = waterUniforms.uTerrainBounds;
+    shader.uniforms.uWaterY = waterUniforms.uWaterY;
+    shader.uniforms.uShoreFadeDist = waterUniforms.uShoreFadeDist;
+    shader.uniforms.uShoreFoamWidth = waterUniforms.uShoreFoamWidth;
+
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        '#include <envmap_pars_vertex>',
+        `#include <envmap_pars_vertex>
+        #ifndef ENV_WORLDPOS
+        varying vec3 vWorldPosition;
+        #endif`
+      )
+      .replace(
+        '#include <worldpos_vertex>',
+        `#include <worldpos_vertex>
+        #ifndef ENV_WORLDPOS
+        vWorldPosition = (modelMatrix * vec4(transformed, 1.0)).xyz;
+        #endif`
+      );
+
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        '#include <envmap_pars_fragment>',
+        `#include <envmap_pars_fragment>
+        #ifndef ENV_WORLDPOS
+        varying vec3 vWorldPosition;
+        #endif
+
+        uniform sampler2D uTerrainTex;
+        uniform vec4 uTerrainBounds;
+        uniform float uWaterY;
+        uniform float uShoreFadeDist;
+        uniform float uShoreFoamWidth;
+
+        // High-precision bilinear sampling of live terrain height map
+        float getDynamicGroundHeight(vec2 worldXZ) {
+          vec2 terrainUV = (worldXZ - uTerrainBounds.xy) / uTerrainBounds.zw;
+          if (terrainUV.x >= 0.002 && terrainUV.x <= 0.998 && terrainUV.y >= 0.002 && terrainUV.y <= 0.998) {
+            vec2 st = terrainUV * 512.0 - 0.5;
+            vec2 i0 = floor(st);
+            vec2 f = fract(st);
+            vec2 tc0 = (clamp(i0, 0.0, 511.0) + 0.5) / 512.0;
+            vec2 tc1 = (clamp(i0 + 1.0, 0.0, 511.0) + 0.5) / 512.0;
+            float d00 = texture2D(uTerrainTex, vec2(tc0.x, tc0.y)).r;
+            float d10 = texture2D(uTerrainTex, vec2(tc1.x, tc0.y)).r;
+            float d01 = texture2D(uTerrainTex, vec2(tc0.x, tc1.y)).r;
+            float d11 = texture2D(uTerrainTex, vec2(tc1.x, tc1.y)).r;
+            return mix(mix(d00, d10, f.x), mix(d01, d11, f.x), f.y);
+          }
+          float r = length(worldXZ);
+          float coast = smoothstep(120.0, 210.0, r);
+          return -coast * coast * 40.0 - 5.0;
+        }`
+      )
+      .replace(
+        '#include <color_fragment>',
+        `#include <color_fragment>
+        {
+          // Dynamic water depth coloring calculated per-pixel from live terrain heights
+          vec2 wp = vWorldPosition.xz;
+          float gH = getDynamicGroundHeight(wp);
+          float dynD = max(0.0, vWorldPosition.y - gH);
+
+          vec3 cShallow = vec3(0.20, 0.72, 0.68);  // vibrant turquoise shallows
+          vec3 cMid     = vec3(0.08, 0.44, 0.56);  // tropical azure lagoon
+          vec3 cDeep    = vec3(0.04, 0.18, 0.30);  // ocean navy
+
+          float d1 = smoothstep(0.05, 2.2, dynD);
+          float d2 = smoothstep(2.2, 9.0, dynD);
+          vec3 dynamicWaterColor = mix(cShallow, cMid, d1);
+          dynamicWaterColor = mix(dynamicWaterColor, cDeep, d2);
+          diffuseColor.rgb = dynamicWaterColor;
+        }`
+      )
       .replace('#include <emissivemap_pars_fragment>', `#include <emissivemap_pars_fragment>
         uniform float uTime;
         uniform float uDayFactor;
@@ -76,14 +155,32 @@ function addWaterScroll(material) {
       .replace(
         '#include <dithering_fragment>',
         `#include <dithering_fragment>
-        // Soft shoreline alpha fade: fades water to transparent where it touches terrain
-        gl_FragColor.a *= smoothstep(0.01, 0.55, vDepth);`
-      )
-      .replace(
-        'directLight.color *= ( directLight.visible && receiveShadow ) ? getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, vDirectionalShadowCoord[ i ] ) : 1.0;',
-        `float shadowVal = ( directLight.visible && receiveShadow ) ? getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, vDirectionalShadowCoord[ i ] ) : 1.0;
-        // Soften shadow cast on water: very low shadow intensity (translucent water in-scattering)
-        directLight.color *= mix(0.82, 1.0, shadowVal);`
+        {
+          // Dynamic live shoreline detection & fade-out:
+          vec2 wp = vWorldPosition.xz;
+          float gH = getDynamicGroundHeight(wp);
+          float dynDepth = vWorldPosition.y - gH;
+
+          // Discard underground water well inland beneath the terrain
+          if (dynDepth < -0.30) {
+            discard;
+          }
+
+          // Dynamic soft shoreline alpha fade: fades water to transparent where it touches terrain
+          float shoreAlpha = smoothstep(0.0, uShoreFadeDist, max(0.0, dynDepth));
+          gl_FragColor.a *= shoreAlpha;
+
+          // Dynamic shoreline contact foam line & wave surge
+          float warpVal = sin(wp.x * 0.04 + wp.y * 0.05 + uTime * 0.25) * 1.6;
+          float waveSurge = sin(uTime * 2.8 - max(0.0, dynDepth) * 15.0 + warpVal * 0.8) * 0.5 + 0.5;
+          float foamBand = smoothstep(uShoreFoamWidth, 0.01, dynDepth) * smoothstep(0.25, 0.75, waveSurge);
+          float contactEdge = 1.0 - smoothstep(0.0, 0.10, max(0.0, dynDepth));
+          float totalFoam = clamp(contactEdge * 0.90 + foamBand * 0.65, 0.0, 1.0) * shoreAlpha;
+
+          vec3 foamColor = vec3(0.92, 0.98, 1.0);
+          gl_FragColor.rgb = mix(gl_FragColor.rgb, foamColor, totalFoam * 0.82);
+          gl_FragColor.a = max(gl_FragColor.a, totalFoam * 0.85);
+        }`
       );
   };
 }
@@ -101,33 +198,22 @@ export function createWater(scene) {
   scene.add(cubeCam);
   scene.environment = cubeRT.texture;
 
-  // Vertex depth attribute for shoreline blending
-  const pos = waterGeo.attributes.position;
-  const colors = new Float32Array(pos.count * 3);
-  const depths = new Float32Array(pos.count);
-  const cShallow = new THREE.Color(0x35b3aa);
-  const cDeep    = new THREE.Color(0x0e3f60);
-  const c = new THREE.Color();
-
-  for (let i = 0; i < pos.count; i++) {
-    const x = pos.getX(i), z = pos.getZ(i);
-    const depth = Math.max(0, WATER_Y - groundHeight(x, z));
-    depths[i] = depth;
-    c.copy(cDeep).lerp(cShallow, 1 - THREE.MathUtils.smoothstep(depth, 0.5, 9));
-    colors.set([c.r, c.g, c.b], i * 3);
-  }
-  waterGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-  waterGeo.setAttribute('aDepth', new THREE.BufferAttribute(depths, 1));
+  // Initialize terrain texture uniform to live terrain texture
+  waterUniforms.uTerrainTex.value = getTerrainDataTexture();
+  waterUniforms.uTerrainBounds.value = TERRAIN_BOUNDS;
+  waterUniforms.uWaterY.value = WATER_Y;
 
   const waterMat = new THREE.MeshPhongMaterial({
-    vertexColors: true,
+    color: new THREE.Color(0x237075),
+    vertexColors: false,
     transparent: true,
-    opacity: 0.82,
+    opacity: 0.85,
     shininess: 160,
     specular: 0x9fd4ff,
     envMap: cubeRT.texture,
     reflectivity: 0.5,
-    side: THREE.DoubleSide
+    side: THREE.DoubleSide,
+    depthWrite: false
   });
   addWaterScroll(waterMat);
 
@@ -135,23 +221,34 @@ export function createWater(scene) {
   water.name = 'water_plane';
   water.position.y = WATER_Y;
   water.receiveShadow = true;
+  water.renderOrder = 1;
   scene.add(water);
 
   let cubeBaked = false;
 
   function updateWater(t, frame, renderer) {
+    // Keep terrain texture uniform reference in sync with live sculpted terrain
+    const liveTex = getTerrainDataTexture();
+    if (waterUniforms.uTerrainTex.value !== liveTex) {
+      waterUniforms.uTerrainTex.value = liveTex;
+    }
+
     // Bake the sky & mountain reflection cubemap once on first frame
     if (!cubeBaked) {
       water.visible = false;
       renderer.shadowMap.autoUpdate = false;
-      cubeCam.update(renderer, scene);
-      water.visible = true;
-      renderer.shadowMap.autoUpdate = true;
-      cubeBaked = true;
+      try {
+        cubeCam.update(renderer, scene);
+      } catch (err) {
+        console.warn('cubeCam update failed:', err);
+      } finally {
+        water.visible = true;
+        renderer.shadowMap.autoUpdate = true;
+        cubeBaked = true;
+      }
     }
 
-    // Dynamic wave normals are 100% computed on GPU in fragment shader via addWaterScroll.
-    // In VR, bypass expensive CPU vertex loops to maximize Quest performance:
+    // Dynamic wave ripples on CPU in non-VR mode
     if (!renderer.xr.isPresenting && frame % 2 === 0) {
       const wpos = waterGeo.attributes.position;
       for (let i = 0; i < wpos.count; i++) {
@@ -169,5 +266,5 @@ export function createWater(scene) {
     }
   }
 
-  return { water, waterGeo, cubeCam, updateWater };
+  return { water, waterGeo, cubeCam, updateWater, waterUniforms };
 }

@@ -66,6 +66,38 @@ const server = http.createServer((req, res) => {
   let reqPath = decodeURI(req.url.split('?')[0]);
   if (reqPath === '/' || reqPath === '') reqPath = '/forest.html';
 
+  if (reqPath === '/api/assets') {
+    const assetsDir = path.join(ROOT_DIR, 'AssetsTest', 'Assets');
+    fs.readdir(assetsDir, (err, files) => {
+      if (err) {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify([]));
+        return;
+      }
+      const glbs = files.filter(f => f.toLowerCase().endsWith('.glb') || f.toLowerCase().endsWith('.gltf'));
+      const list = glbs.map(f => {
+        const stats = fs.statSync(path.join(assetsDir, f));
+        const name = f.replace(/\.(glb|gltf)$/i, '');
+        let category = 'Prop';
+        if (/torii|portal|bridge|well|lamp post/i.test(name)) category = 'Structure';
+        else if (/tree|flower|plant|rock/i.test(name)) category = 'Nature';
+        else if (/sprite/i.test(name)) category = 'Character';
+        return {
+          id: name.toLowerCase().replace(/\s+/g, '_'),
+          name: name.charAt(0).toUpperCase() + name.slice(1),
+          filename: f,
+          url: `./AssetsTest/Assets/${encodeURIComponent(f)}`,
+          sizeBytes: stats.size,
+          sizeMB: (stats.size / 1024 / 1024).toFixed(1),
+          category
+        };
+      });
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(list));
+    });
+    return;
+  }
+
   const filePath = path.normalize(path.join(ROOT_DIR, reqPath));
 
   // Security check: ensure path stays within ROOT_DIR
@@ -90,21 +122,16 @@ const server = http.createServer((req, res) => {
   });
 });
 
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`\n======================================================`);
-  console.log(`🌲 Forest Dev Server is RUNNING on http://localhost:${PORT}`);
-  console.log(`======================================================\n`);
-
+function launchOnQuest() {
   const adb = findAdb();
   if (!adb) {
     console.error(`⚠️ Could not find adb.exe automatically.`);
-    console.log(`Please make sure your Quest is in Developer Mode, or run manual steps.`);
-    return;
+    console.log(`Please make sure your Quest is in Developer Mode, or add adb to PATH.`);
+    return false;
   }
 
   console.log(`Using ADB: ${adb}`);
 
-  // Check connected devices
   try {
     const devicesOutput = execSync(`"${adb}" devices`).toString();
     console.log(devicesOutput.trim());
@@ -112,7 +139,7 @@ server.listen(PORT, '0.0.0.0', () => {
     if (!devicesOutput.includes('\tdevice')) {
       console.warn(`\n⚠️ No active Quest device detected via ADB!`);
       console.log(`Please connect your Quest via USB/Wi-Fi and allow USB Debugging in the headset.`);
-      return;
+      return false;
     }
 
     // 2. Reverse port 8000 so Quest can access PC's localhost:8000 securely
@@ -128,8 +155,27 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`\n🚀 LAUNCH SUCCESSFUL!`);
     console.log(`Look inside your Quest headset: Oculus Browser is now opening Forest!`);
     console.log(`Click "ENTER VR" at the bottom right to enter immersive VR with wrist FPS HUD.`);
-    console.log(`Press Ctrl+C to stop the dev server when done.\n`);
+    return true;
   } catch (err) {
     console.error(`ADB execution error:`, err.message);
+    return false;
   }
+}
+
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.log(`\n⚡ Dev server is already active on http://localhost:${PORT}`);
+    console.log(`Pushing directly to connected Quest headset...\n`);
+    launchOnQuest();
+  } else {
+    console.error('Server error:', err);
+  }
+});
+
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`\n======================================================`);
+  console.log(`🌲 Forest Dev Server is RUNNING on http://localhost:${PORT}`);
+  console.log(`======================================================\n`);
+  launchOnQuest();
+  console.log(`Press Ctrl+C to stop the dev server when done.\n`);
 });

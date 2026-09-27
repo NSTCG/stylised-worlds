@@ -1,9 +1,21 @@
+/**
+ * src/vr.js
+ * Meta Quest WebXR integration with:
+ * - Free Roam & 3D Flight locomotion (Toggle with X button)
+ * - Interactive in-VR 3D tablet UI (Sculpt, Tree Samplers, Prop Placing, Level Saving)
+ * - Right-hand laser pointer editing (Terrain sculpt, Tree stamp/erase, Prop placement)
+ * - 90 FPS target framerate & fixed foveation optimization for Quest 2/3/Pro
+ */
 import * as THREE from 'three';
 import { VRButton } from 'three/addons/webxr/VRButton.js';
-import { groundHeight } from './terrain.js';
+import { groundHeight, getGroundMesh } from './terrain.js';
 import { grassConfig } from './grass.js';
+import { createVRUI } from './vrUI.js';
+import { placeTreeAt, sampleTreeCluster, eraseTreesInRadius, rebuildTreesPCG } from './trees.js';
+import { confirmPlacement, updateGhostPosition, placementState } from './assetsManager.js';
+import { saveLevelToStorage, loadLevelFromStorage, showNotification } from './levelSerializer.js';
 
-export function setupVR(renderer, scene, camera, player, getIsWalkMode, controls) {
+export function setupVR(renderer, scene, camera, player, getIsWalkMode, controls, editorApi = null) {
   renderer.xr.enabled = true;
 
   // Append styled VR Button
@@ -38,11 +50,143 @@ export function setupVR(renderer, scene, camera, player, getIsWalkMode, controls
 
   // Controller guide pointer beams
   const beamMat = new THREE.MeshBasicMaterial({ color: 0x7ef088, transparent: true, opacity: 0.5 });
-  const beamGeo = new THREE.CylinderGeometry(0.002, 0.002, 0.4).rotateX(Math.PI / 2).translate(0, 0, -0.2);
-  controller0.add(new THREE.Mesh(beamGeo, beamMat));
-  controller1.add(new THREE.Mesh(beamGeo, beamMat));
+  const beamGeo = new THREE.CylinderGeometry(0.002, 0.002, 0.5).rotateX(Math.PI / 2).translate(0, 0, -0.25);
+  const beamMesh0 = new THREE.Mesh(beamGeo, beamMat);
+  const beamMesh1 = new THREE.Mesh(beamGeo, beamMat);
+  controller0.add(beamMesh0);
+  controller1.add(beamMesh1);
 
-  // Right-hand wrist FPS display
+  // Locomotion & Flight State
+  let isFlyMode = false;
+  let xBtnPrev = false;
+  let yBtnPrev = false;
+  let bBtnPrev = false;
+
+  function toggleFlyMode() {
+    isFlyMode = !isFlyMode;
+    showNotification(
+      isFlyMode ? '🕊️ Fly Mode Active! Soar in 3D (Press X to Land)' : '🚶 Ground Walk Mode Active',
+      'success'
+    );
+    if (vrUI) vrUI.renderUI();
+  }
+
+  // ---------------------------------------------------------- Interactive In-VR Tablet UI
+  const vrUI = createVRUI(
+    cameraRig,
+    cameraRig,
+    window.envConfig || {},
+    toggleFlyMode,
+    () => isFlyMode
+  );
+
+  // Position tablet comfortably in front of user view
+  vrUI.panelMesh.position.set(0, 1.25, -1.15);
+  vrUI.panelMesh.rotation.set(-0.15, 0, 0);
+
+  // Reposition UI tablet in front of player when summoned
+  function repositionVRUI() {
+    vrUI.panelMesh.visible = true;
+    const fwd = new THREE.Vector3(0, 0, -1);
+    const xrCam = renderer.xr.getCamera ? renderer.xr.getCamera() : camera;
+    if (xrCam && xrCam.quaternion) {
+      fwd.applyQuaternion(xrCam.quaternion);
+    }
+    fwd.y = 0;
+    if (fwd.lengthSq() > 0.001) fwd.normalize();
+    else fwd.set(0, 0, -1);
+
+    vrUI.panelMesh.position.copy(camera.position).addScaledVector(fwd, 1.15);
+    vrUI.panelMesh.position.y = Math.max(1.1, camera.position.y - 0.15);
+    vrUI.panelMesh.quaternion.copy(camera.quaternion);
+    vrUI.renderUI();
+  }
+
+  // ---------------------------------------------------------- Brush Ground Indicator
+  const groundMesh = getGroundMesh();
+  const _vrRay = new THREE.Raycaster();
+  const _vPos = new THREE.Vector3(), _vQuat = new THREE.Quaternion(), _vDir = new THREE.Vector3();
+  const _vBrushColorMap = {
+    grass: 0x7ef088, sand: 0xf2d680, road: 0xb5885c, water: 0x38bdf8,
+    raise: 0xff6b4a, lower: 0x818cf8, smooth: 0xe2e8f0, rock: 0x94a3b8
+  };
+
+  const vrRingGeo = new THREE.RingGeometry(0.92, 1.0, 32);
+  vrRingGeo.rotateX(-Math.PI / 2);
+  const vrRingMat = new THREE.MeshBasicMaterial({
+    color: 0x7ef088,
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.85,
+    depthTest: false
+  });
+  const vrBrushRing = new THREE.Mesh(vrRingGeo, vrRingMat);
+  vrBrushRing.renderOrder = 999;
+  vrBrushRing.visible = false;
+  scene.add(vrBrushRing);
+
+  // Controller ray -> terrain hit point
+  function getControllerGroundHit(controller) {
+    if (!groundMesh) return null;
+    controller.getWorldPosition(_vPos);
+    controller.getWorldQuaternion(_vQuat);
+    _vDir.set(0, 0, -1).applyQuaternion(_vQuat);
+    _vrRay.set(_vPos, _vDir);
+    const hits = _vrRay.intersectObject(groundMesh, false);
+    return hits.length ? hits[0].point : null;
+  }
+
+  let isSqueezePainting = false;
+
+  // Bind Controller Triggers & Grips for World Editing
+  function bindControllerActions(controller) {
+    // Trigger Press (Selectstart)
+    controller.addEventListener('selectstart', () => {
+      // 1. Check if clicking on In-VR UI tablet
+      const uiHit = vrUI.raycastUI(controller);
+      if (uiHit) {
+        vrUI.triggerClick();
+        return;
+      }
+
+      // 2. Otherwise interact with world / terrain
+      const hit = getControllerGroundHit(controller);
+      if (!hit) return;
+
+      const tool = vrUI.state.activeTool;
+      if (tool === 'terrain') {
+        if (window.terrainEditor?.editorState) {
+          window.terrainEditor.editorState.brushRadius = vrUI.state.brushRadius || 10;
+        }
+        if (editorApi?.applyBrushAt) {
+          editorApi.applyBrushAt(hit.x, hit.z);
+        }
+      } else if (tool === 'tree_stamp') {
+        const type = vrUI.state.selectedTreeType || 'conifer';
+        placeTreeAt(hit.x, hit.z, type);
+      } else if (tool === 'tree_cluster') {
+        const type = vrUI.state.selectedTreeType || 'conifer';
+        sampleTreeCluster(hit.x, hit.z, 6, 12.0, type);
+      } else if (tool === 'tree_eraser') {
+        eraseTreesInRadius(hit.x, hit.z, 6.0);
+      } else if (tool === 'prop_place') {
+        confirmPlacement(hit.x, hit.z);
+      }
+    });
+
+    // Squeeze / Grip for continuous terrain sculpting
+    controller.addEventListener('squeezestart', () => {
+      isSqueezePainting = true;
+    });
+    controller.addEventListener('squeezeend', () => {
+      isSqueezePainting = false;
+    });
+  }
+
+  bindControllerActions(controller0);
+  bindControllerActions(controller1);
+
+  // ---------------------------------------------------------- Right-hand Wrist FPS Display
   const rightHandGroup = new THREE.Group();
   rightHandGroup.visible = false;
   scene.add(rightHandGroup);
@@ -57,7 +201,6 @@ export function setupVR(renderer, scene, camera, player, getIsWalkMode, controls
     new THREE.PlaneGeometry(0.18, 0.09),
     new THREE.MeshBasicMaterial({ map: fpsTex, transparent: true, side: THREE.DoubleSide })
   );
-  // Angled on right wrist facing user eye
   fpsPanel.position.set(0, 0.065, -0.04);
   fpsPanel.rotation.x = -Math.PI * 0.35;
   rightHandGroup.add(fpsPanel);
@@ -87,12 +230,12 @@ export function setupVR(renderer, scene, camera, player, getIsWalkMode, controls
     cxFps.fillStyle = '#ffffff';
     const kCount = (grassConfig.currentCount / 1000).toFixed(0);
     const rVal = Math.round(grassConfig.currentRadius);
-    const triStr = window.totalSceneTriangles ? ` · ${(window.totalSceneTriangles / 1000).toFixed(0)}k TRIS` : '';
-    cxFps.fillText(`${ms.toFixed(1)}ms · GRASS: ${kCount}k (${rVal}m)${triStr}`, 36, 185);
+    const modeStr = isFlyMode ? ' · 🕊️ FLY' : ' · 🚶 WALK';
+    cxFps.fillText(`${ms.toFixed(1)}ms · GRASS: ${kCount}k${modeStr}`, 36, 185);
 
     cxFps.font = '21px monospace';
     cxFps.fillStyle = 'rgba(220, 240, 210, 0.75)';
-    cxFps.fillText('L-STICK: Move (Head-Rel) · R-STICK: Turn', 36, 224);
+    cxFps.fillText('X: Toggle Fly · Y/B: UI Menu', 36, 224);
 
     fpsTex.needsUpdate = true;
   }
@@ -110,30 +253,19 @@ export function setupVR(renderer, scene, camera, player, getIsWalkMode, controls
   bindControllerEvents(controller0, controllerGrip0);
   bindControllerEvents(controller1, controllerGrip1);
 
-  renderer.xr.setFoveation(1.0); // Maximum fixed foveation (1.0 = maximum peripheral VRS for Quest)
+  renderer.xr.setFoveation(1.0); // Maximum fixed foveation for Quest 2/3/Pro
 
   renderer.xr.addEventListener('sessionstart', () => {
     controls.enabled = false;
     renderer.xr.setFoveation(1.0);
     const session = renderer.xr.getSession();
     if (session) {
-      // Set target framerate to 90 FPS for Quest
-      if (session.updateTargetFrameRate) {
-        if (session.supportedFrameRates) {
-          const rates = Array.from(session.supportedFrameRates);
-          const rate90 = rates.find(r => Math.round(r) === 90);
-          const rate72 = rates.find(r => Math.round(r) === 72);
-          const rate60 = rates.find(r => Math.round(r) === 60);
-          if (rate90) {
-            session.updateTargetFrameRate(rate90).catch(() => {});
-          } else if (rate72) {
-            session.updateTargetFrameRate(rate72).catch(() => {});
-          } else if (rate60) {
-            session.updateTargetFrameRate(rate60).catch(() => {});
-          }
-        } else {
-          session.updateTargetFrameRate(90).catch(() => {});
-        }
+      if (session.updateTargetFrameRate && session.supportedFrameRates) {
+        const rates = Array.from(session.supportedFrameRates);
+        const rate90 = rates.find(r => Math.round(r) === 90);
+        const rate72 = rates.find(r => Math.round(r) === 72);
+        if (rate90) session.updateTargetFrameRate(rate90).catch(() => {});
+        else if (rate72) session.updateTargetFrameRate(rate72).catch(() => {});
       }
       try {
         if (session.renderState?.baseLayer && 'fixedFoveation' in session.renderState.baseLayer) {
@@ -156,6 +288,7 @@ export function setupVR(renderer, scene, camera, player, getIsWalkMode, controls
     cameraRig.position.y = Math.max(gh, 0.2);
     camera.position.set(0, 0, 0);
     camera.rotation.set(0, 0, 0);
+    repositionVRUI();
   });
 
   renderer.xr.addEventListener('sessionend', () => {
@@ -164,7 +297,7 @@ export function setupVR(renderer, scene, camera, player, getIsWalkMode, controls
     cameraRig.position.set(0, 0, 0);
   });
 
-  // Real-time FPS tracker
+  // FPS tracker
   let fpsFrames = 0;
   let fpsLastTime = performance.now();
   let smoothedFps = 60;
@@ -196,90 +329,112 @@ export function setupVR(renderer, scene, camera, player, getIsWalkMode, controls
   function updateVR(dt) {
     const session = renderer.xr.getSession();
     if (session && renderer.xr.isPresenting) {
-      // Enforce full fixed foveation for maximum Quest performance
       if (renderer.xr.setFoveation) {
         renderer.xr.setFoveation(1.0);
       }
-      try {
-        if (session.renderState?.baseLayer && 'fixedFoveation' in session.renderState.baseLayer) {
-          session.renderState.baseLayer.fixedFoveation = 1.0;
-        }
-        if (session.renderState?.layers) {
-          for (const layer of session.renderState.layers) {
-            if (layer && 'fixedFoveation' in layer) layer.fixedFoveation = 1.0;
-          }
-        }
-      } catch (e) {}
 
-      // Refresh XR camera and keep camera rig and camera world transforms synced
       if (renderer.xr.updateCamera) {
         renderer.xr.updateCamera(camera);
       }
       cameraRig.updateMatrixWorld(true);
       camera.updateMatrixWorld(true);
 
+      // Check controller inputs
       for (let i = 0; i < session.inputSources.length; i++) {
         const src = session.inputSources[i];
-        if (src.handedness === 'right') {
-          const grip = (i === 0 ? controllerGrip0 : controllerGrip1);
-          if (rightHandGroup.parent !== grip) {
-            grip.add(rightHandGroup);
-            rightHandGroup.position.set(0, 0, 0);
-            rightHandGroup.visible = true;
-          }
-        }
-        if (!src.gamepad || !src.gamepad.axes) continue;
-        const axes = src.gamepad.axes;
-        if (axes.length < 2) continue;
+        const gp = src.gamepad;
+        if (!gp) continue;
 
+        // Check Left Controller Buttons (X button = buttons[4], Y button = buttons[5])
+        if (src.handedness === 'left') {
+          // X Button: Toggle Free Roam / Fly Mode
+          const xPressed = (gp.buttons[4] && gp.buttons[4].pressed) || (gp.buttons[2] && gp.buttons[2].pressed);
+          if (xPressed && !xBtnPrev) {
+            toggleFlyMode();
+          }
+          xBtnPrev = !!xPressed;
+
+          // Y Button: Toggle VR UI Menu
+          const yPressed = gp.buttons[5] && gp.buttons[5].pressed;
+          if (yPressed && !yBtnPrev) {
+            repositionVRUI();
+          }
+          yBtnPrev = !!yPressed;
+        }
+
+        // Check Right Controller Buttons (A button = buttons[4], B button = buttons[5])
+        if (src.handedness === 'right') {
+          const bPressed = gp.buttons[5] && gp.buttons[5].pressed;
+          if (bPressed && !bBtnPrev) {
+            repositionVRUI();
+          }
+          bBtnPrev = !!bPressed;
+
+          // Raycast laser to VR UI for hover tracking
+          vrUI.raycastUI(controller1);
+        }
+
+        // Joystick Locomotion
+        if (!gp.axes || gp.axes.length < 2) continue;
+        const axes = gp.axes;
         let stickX = 0, stickY = 0;
         if (axes.length >= 4 && (Math.abs(axes[2]) > 0.12 || Math.abs(axes[3]) > 0.12)) {
-          stickX = axes[2];
-          stickY = axes[3];
+          stickX = axes[2]; stickY = axes[3];
         } else if (Math.abs(axes[0]) > 0.12 || Math.abs(axes[1]) > 0.12) {
-          stickX = axes[0];
-          stickY = axes[1];
+          stickX = axes[0]; stickY = axes[1];
         }
 
         if (src.handedness === 'left') {
-          // Move in exact direction user is looking in VR headset (respects real-time head gaze + rig snap turns)
+          // Left Stick Locomotion
           if (Math.abs(stickX) > 0.12 || Math.abs(stickY) > 0.12) {
-            const moveSpeed = 6.5 * dt;
+            const xrCam = renderer.xr.getCamera ? renderer.xr.getCamera() : camera;
 
-            // Get the active WebXR headset camera with real-time 6DoF tracking
-            const xrCam = renderer.xr.getCamera ? renderer.xr.getCamera() : null;
+            if (isFlyMode) {
+              // 🕊️ FULL 3D FLIGHT LOCOMOTION
+              // Moves in the exact 3D gaze vector (pitch + yaw) to soar across the sky!
+              const flyDir = new THREE.Vector3(0, 0, -1);
+              if (xrCam && xrCam.quaternion) {
+                flyDir.applyQuaternion(xrCam.quaternion);
+              } else {
+                camera.getWorldDirection(flyDir);
+              }
+              flyDir.applyQuaternion(cameraRig.quaternion).normalize();
 
-            // Compute real-time world-space forward gaze direction from the headset:
-            // 1. Start with -Z forward vector
-            // 2. Apply headset 6DoF rotation in physical room
-            // 3. Apply cameraRig rotation in virtual world
-            const headDir = new THREE.Vector3(0, 0, -1);
-            if (xrCam && xrCam.quaternion) {
-              headDir.applyQuaternion(xrCam.quaternion);
+              const flyRgt = new THREE.Vector3().crossVectors(flyDir, new THREE.Vector3(0, 1, 0)).normalize();
+              const flySpd = 14.0 * dt; // Fast smooth soaring speed
+
+              cameraRig.position.addScaledVector(flyDir, -stickY * flySpd);
+              cameraRig.position.addScaledVector(flyRgt, stickX * flySpd);
+
+              // Altitude bounds in fly mode (0.3m to 90m)
+              cameraRig.position.y = THREE.MathUtils.clamp(cameraRig.position.y, 0.3, 90.0);
             } else {
-              camera.getWorldDirection(headDir);
-            }
-            headDir.applyQuaternion(cameraRig.quaternion);
-            headDir.y = 0;
-            if (headDir.lengthSq() > 0.0001) {
-              headDir.normalize();
-            } else {
-              headDir.set(0, 0, -1);
-            }
+              // 🚶 GROUND WALK LOCOMOTION
+              const headDir = new THREE.Vector3(0, 0, -1);
+              if (xrCam && xrCam.quaternion) {
+                headDir.applyQuaternion(xrCam.quaternion);
+              } else {
+                camera.getWorldDirection(headDir);
+              }
+              headDir.applyQuaternion(cameraRig.quaternion);
+              headDir.y = 0;
+              if (headDir.lengthSq() > 0.0001) headDir.normalize();
+              else headDir.set(0, 0, -1);
 
-            const headRgt = new THREE.Vector3().crossVectors(headDir, new THREE.Vector3(0, 1, 0)).normalize();
-            cameraRig.position.addScaledVector(headDir, -stickY * moveSpeed);
-            cameraRig.position.addScaledVector(headRgt, stickX * moveSpeed);
+              const headRgt = new THREE.Vector3().crossVectors(headDir, new THREE.Vector3(0, 1, 0)).normalize();
+              const moveSpeed = 6.5 * dt;
+
+              cameraRig.position.addScaledVector(headDir, -stickY * moveSpeed);
+              cameraRig.position.addScaledVector(headRgt, stickX * moveSpeed);
+            }
 
             const r = Math.hypot(cameraRig.position.x, cameraRig.position.z);
             if (r > 200) cameraRig.position.setLength(200);
           }
         } else if (src.handedness === 'right') {
-          // Snap rotation with right stick (45 degrees per flick with release-to-center debounce)
+          // Right Stick Snap Turning
           if (Math.abs(stickX) > 0.55) {
             if (snapTurnReady) {
-              // stickX > 0: flicked right -> snap turn right (clockwise)
-              // stickX < 0: flicked left  -> snap turn left (counter-clockwise)
               const snapDir = stickX > 0 ? -1 : 1;
               cameraRig.rotation.y += snapDir * SNAP_ANGLE;
               cameraRig.updateMatrixWorld(true);
@@ -291,14 +446,44 @@ export function setupVR(renderer, scene, camera, player, getIsWalkMode, controls
           }
         }
       }
-      const gh = groundHeight(cameraRig.position.x, cameraRig.position.z);
-      cameraRig.position.y = Math.max(gh, 0.1);
+
+      // Ground clamping (ONLY in ground walk mode; disabled in Fly Mode so user can soar!)
+      if (!isFlyMode) {
+        const gh = groundHeight(cameraRig.position.x, cameraRig.position.z);
+        cameraRig.position.y = Math.max(gh, 0.1);
+      }
+
+      // Continuous Squeeze Sculpting & Ring positioning
+      const hit = getControllerGroundHit(controller1);
+      if (hit) {
+        vrBrushRing.position.set(hit.x, hit.y + 0.08, hit.z);
+        const radius = window.terrainEditor?.editorState?.brushRadius || 10;
+        vrBrushRing.scale.setScalar(radius);
+        const bType = window.terrainEditor?.editorState?.brushType || 'grass';
+        vrRingMat.color.setHex(_vBrushColorMap[bType] || 0x7ef088);
+        vrBrushRing.visible = true;
+
+        if (isSqueezePainting && editorApi?.applyBrushAt) {
+          editorApi.applyBrushAt(hit.x, hit.z);
+        }
+
+        // Ghost prop update
+        if (placementState.active) {
+          updateGhostPosition(hit.x, hit.z);
+        }
+      } else {
+        vrBrushRing.visible = false;
+      }
     }
   }
 
   return {
     cameraRig,
+    vrUI,
     updateVR,
-    recordFps
+    recordFps,
+    toggleFlyMode,
+    isFlyMode: () => isFlyMode,
+    repositionVRUI
   };
 }
