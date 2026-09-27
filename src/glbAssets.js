@@ -8,6 +8,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { applyAtmosphericFog } from './environment.js';
+import { setupModelMaterials } from './materialFeatures.js';
 import { ASSET_DEFINITIONS } from './assetsManager.js';
 import { registerObstacle, unregisterObstacle } from './treeRules.js';
 import { eraseTreesInRadius } from './trees.js';
@@ -79,15 +80,8 @@ function _placeClone(name, point, scale, yaw) {
   const id = `glb_${name}_${_nextId++}`;
   clone.name = id;
 
-  // Patch materials for atmospheric fog
-  clone.traverse((o) => {
-    if (o.isMesh && o.material) {
-      const mats = Array.isArray(o.material) ? o.material : [o.material];
-      for (const m of mats) applyAtmosphericFog(m);
-      o.castShadow = true;
-      o.receiveShadow = true;
-    }
-  });
+  // Patch materials for atmospheric fog & terrain contact ground blending
+  setupModelMaterials(clone, { blendDistance: 0.35, blendStrength: 0.85 });
 
   const M = new THREE.Matrix4();
   const Q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw);

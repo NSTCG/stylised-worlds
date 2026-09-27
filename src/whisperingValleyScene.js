@@ -10,6 +10,9 @@ import { registerObstacle, unregisterObstacle } from './treeRules.js';
 import { placeTreeAt, eraseTreesInRadius } from './trees.js';
 import { 
   getTerrainDataTexture, 
+  getGrassMaskTexture,
+  setGrassMaskInRadius,
+  setGrassMaskInBox,
   getGroundMesh, 
   TERRAIN_BOUNDS, 
   groundHeight,
@@ -22,6 +25,7 @@ import {
   cSeaShallow, 
   cRock 
 } from './terrain.js';
+import { setupModelMaterials } from './materialFeatures.js';
 import { showNotification } from './levelSerializer.js';
 
 let _valleyRoot = null;
@@ -255,6 +259,12 @@ export function _sculptValleyTerrain() {
   posAttr.needsUpdate = true;
   colAttr.needsUpdate = true;
   geo.computeVertexNormals();
+
+  // Exclude grass from crop field, garden plots, farmstead yard, and dock
+  // This ensures the green ground inside the crop region remains 100% free of grass blades!
+  setGrassMaskInBox(-17.5, 11.0, -5.0, 19.5, 0.0, 1.2); // Fenced Vegetable & Crop Region
+  setGrassMaskInRadius(-15.5, 6.0, 4.5, 0.0, true);     // Farmhouse courtyard & porch
+  setGrassMaskInRadius(13.6, 17.5, 3.8, 0.0, true);     // Wooden fishing dock
 }
 
 /* ---------------------------------------------------------- 2. Instanced Tree System */
@@ -644,6 +654,12 @@ function _spawnProp(group, assetKey, def) {
   const finalY = gY + (def.yOffset || 0);
 
   const placeholder = _createFastPlaceholder(assetKey);
+  setupModelMaterials(placeholder, {
+    blendDistance: assetKey.startsWith('rock') ? 0.42 : 0.30,
+    blendStrength: assetKey.startsWith('rock') ? 0.88 : 0.70,
+    normalBlend: 0.60
+  });
+
   const node = new THREE.Group();
   node.name = `prop_${assetKey}_${Math.random().toString(36).substr(2, 6)}`;
   node.userData = { assetKey, def };
@@ -898,35 +914,71 @@ function _createFastPlaceholder(key) {
 
 /**
  * Asynchronously loads and optimizes GLB models in background, then seamlessly upgrades placeholders
+ * with proper atmospheric fog and terrain ground blending
  */
 async function _streamAndUpgradeGlbs(root) {
   const toLoad = Object.entries(VALLEY_ASSETS);
 
   for (const [key, def] of toLoad) {
     try {
-      let optModel = _optimizedCache.get(key);
-      if (!optModel) {
-        // Load raw GLB
-        const gltf = await new Promise((resolve, reject) => {
-          _gltfLoader.load(def.url, resolve, undefined, reject);
-        });
+      let wrapper = _optimizedCache.get(key);
+      if (!wrapper) {
+        let rawScene = null;
 
-        // Optimize with Quest Profile: 10% simplify ratio, 512px WebP textures
-        optModel = await optimizeModel(gltf.scene, {
-          simplifyRatio: 0.10,
-          maxTextureRes: 512,
-          textureFormat: 'webp',
-          textureQuality: 0.75,
-          targetError: 0.02
-        });
+        // 1. Check if pre-optimized asset is available first
+        const optUrl = `./AssetsTest/Optimized/${encodeURIComponent(def.filename)}`;
+        try {
+          const optGltf = await new Promise((resolve, reject) => {
+            _gltfLoader.load(optUrl, resolve, undefined, reject);
+          });
+          rawScene = optGltf.scene;
+        } catch (_) {
+          // Fallback to raw GLB and optimize on the fly
+          const gltf = await new Promise((resolve, reject) => {
+            _gltfLoader.load(def.url, resolve, undefined, reject);
+          });
+          rawScene = await optimizeModel(gltf.scene, {
+            simplifyRatio: 0.10,
+            maxTextureRes: 512,
+            textureFormat: 'webp',
+            textureQuality: 0.75,
+            targetError: 0.02
+          });
+        }
 
-        // Center bottom pivot
-        const box = new THREE.Box3().setFromObject(optModel);
+        // 2. Calibrate orientation and bounding box
+        wrapper = new THREE.Group();
+        wrapper.name = `${key}_wrapper`;
+
+        let box = new THREE.Box3().setFromObject(rawScene);
+        let size = box.getSize(new THREE.Vector3());
+
+        // Ensure bridge spans across the river channel along Z
+        if (key === 'bridge' && size.x > size.z) {
+          rawScene.rotation.y = Math.PI * 0.5;
+          box.setFromObject(rawScene);
+          size = box.getSize(new THREE.Vector3());
+        }
+
+        // Ensure Torii gate passage aligns with path
+        if (key === 'torii_gate' && size.z > size.x) {
+          rawScene.rotation.y = Math.PI * 0.5;
+          box.setFromObject(rawScene);
+        }
+
+        // Center bottom pivot at (0, 0, 0)
         const center = box.getCenter(new THREE.Vector3());
-        optModel.position.sub(center);
-        optModel.position.y += (box.max.y - box.min.y) * 0.5;
+        rawScene.position.set(-center.x, -box.min.y, -center.z);
+        wrapper.add(rawScene);
 
-        _optimizedCache.set(key, optModel);
+        // 3. Fix all materials with proper atmospheric fog & contact ground blending
+        setupModelMaterials(wrapper, {
+          blendDistance: key.startsWith('rock') ? 0.45 : (key === 'well' || key === 'bridge' ? 0.35 : 0.28),
+          blendStrength: key.startsWith('rock') ? 0.90 : 0.75,
+          normalBlend: 0.65
+        });
+
+        _optimizedCache.set(key, wrapper);
       }
 
       // Upgrade all matching placeholder instances in root
@@ -935,7 +987,7 @@ async function _streamAndUpgradeGlbs(root) {
           while (node.children.length > 0) {
             node.remove(node.children[0]);
           }
-          const instance = optModel.clone(true);
+          const instance = wrapper.clone(true);
           node.add(instance);
         }
       });
@@ -945,3 +997,4 @@ async function _streamAndUpgradeGlbs(root) {
     }
   }
 }
+

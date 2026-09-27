@@ -208,8 +208,11 @@
     </div>
     
     <div class="brush-grid">
-      <button class="brush-btn active" data-brush="grass" title="Green Ground (Grass & Trees grow here)">
+      <button class="brush-btn active" data-brush="grass" title="Green Grass (Spawns GPU grass blades)">
         <span>🌿</span>Grass
+      </button>
+      <button class="brush-btn" data-brush="no_grass" title="Green Ground / Lawn / Crop (Zero grass blades)">
+        <span>🌱</span>No Grass
       </button>
       <button class="brush-btn" data-brush="sand" title="Golden Sand / Beach (Clears grass)">
         <span>🏖️</span>Sand
@@ -501,18 +504,22 @@
     <button id="openAssetBrowserBtn" style="pointer-events:auto; cursor:pointer; background:linear-gradient(135deg, rgba(56, 189, 248, 0.35), rgba(126, 240, 136, 0.35)); border:1px solid #7ef088; color:#fff; padding:2px 10px; border-radius:12px; font:11px monospace; backdrop-filter:blur(4px); font-weight:bold;" title="Open 3D Models Library, 3D Preview Inspector & Optimizer">
       📦 3D Models & Optimizer
     </button>
+    <button id="vrmAvatarBtn" style="pointer-events:auto; cursor:pointer; background:linear-gradient(135deg, rgba(236, 72, 153, 0.45), rgba(168, 85, 247, 0.45)); border:1px solid #f472b6; color:#fff; padding:2px 10px; border-radius:12px; font:11px monospace; backdrop-filter:blur(4px); font-weight:bold;" title="Toggle VRM Character Controller & First/Third Person Mode">
+      👤 VRM Avatar (C)
+    </button>
     <button id="toggleSideBtn" style="pointer-events:auto; cursor:pointer; background:rgba(255,255,255,0.18); border:1px solid rgba(255,255,255,0.35); color:#eaf2df; padding:2px 8px; border-radius:12px; font:11px monospace; backdrop-filter:blur(4px);">
       🛠️ Editor Controls
     </button>
   </div>
-  <span id="hudHelp">🖱️ Left: Draw / Place &nbsp;·&nbsp; Right: Look &nbsp;·&nbsp; W/E/R: Move/Rotate/Scale &nbsp;·&nbsp; G: Snap &nbsp;·&nbsp; V: Walk &nbsp;·&nbsp; F: Fly &nbsp;·&nbsp; Ctrl+S: Quick Save</span>
+  <span id="hudHelp">WASD / Stick — Move &nbsp;·&nbsp; Mouse / Head — Look &nbsp;·&nbsp; C — 1st/3rd Person &nbsp;·&nbsp; Shift — Sprint &nbsp;·&nbsp; V — Orbit &nbsp;·&nbsp; F — Fly &nbsp;·&nbsp; 🥽 VR Ready</span>
 </div>
 
 <script type="importmap">
 {
   "imports": {
     "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+    "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@3/lib/three-vrm.module.js"
   }
 }
 </script>

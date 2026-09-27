@@ -60,9 +60,9 @@ export function setupTransformManager(scene, camera, domElement, orbitControls) 
     // Check if click was on HUD
     if (_hudElement && _hudElement.contains(e.target)) return;
 
-    // Only pick if editor brush is NOT in continuous paint mode (e.g. grass, water, raise, lower)
+    // Only pick if editor brush is NOT in continuous paint mode (e.g. grass, no_grass, water, raise, lower)
     const brushType = window.terrainEditor?.editorState?.brushType;
-    const isPaintBrush = ['grass', 'sand', 'road', 'water', 'raise', 'lower', 'smooth', 'rock'].includes(brushType);
+    const isPaintBrush = ['grass', 'no_grass', 'sand', 'road', 'water', 'raise', 'lower', 'smooth', 'rock'].includes(brushType);
     if (isPaintBrush && e.shiftKey === false && window.terrainEditor?.editorState?.isPainting) return;
 
     const rect = domElement.getBoundingClientRect();

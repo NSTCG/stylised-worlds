@@ -21,6 +21,7 @@ import { setupAssetBrowser, toggleAssetBrowser } from './assetBrowser.js';
 import { getAssetById } from './assetCatalog.js';
 import { openModelPreviewModal } from './modelPreviewModal.js';
 import { buildWhisperingValley } from './whisperingValleyScene.js';
+import { VRMCharacterController } from './vrmController.js';
 
 window.setGrassHeightScale = setGrassHeightScale;
 
@@ -41,6 +42,7 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 600);
 camera.position.set(21, 5.5, 25);
 
+window.THREE = THREE;
 window.scene = scene;
 window.camera = camera;
 window.renderer = renderer;
@@ -90,6 +92,13 @@ const { cameraRig, updateVR, recordFps } = setupVR(renderer, scene, camera, play
 window.player = player;
 window.controls = controls;
 window.cameraRig = cameraRig;
+
+/* ---------------------------------------------------------- VRM Character Controller */
+const vrmController = new VRMCharacterController(scene, camera, renderer, cameraRig);
+window.vrmController = vrmController;
+
+// Auto-load high quality VRoid Avatar
+vrmController.loadVRM();
 
 // Hook Ground Blend Slider
 const groundBlendSlider = document.getElementById('groundBlendSlider');
@@ -397,6 +406,9 @@ function tick() {
 
   // VR locomotion & right-hand controller tracking
   updateVR(dt);
+
+  // VRM Character Controller (WASD, VR Thumbsticks, 3-point tracking, IK)
+  vrmController.update(dt);
 
   // Update dynamic grass pool centered around exact world-space user position
   camera.getWorldPosition(_userPos);

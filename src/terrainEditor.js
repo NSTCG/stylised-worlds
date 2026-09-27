@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { 
   getTerrainDataTexture, 
+  getGrassMaskTexture,
   getGroundMesh, 
   TERRAIN_BOUNDS, 
   groundHeight, 
@@ -20,7 +21,7 @@ import { placementState, updateGhostPosition, confirmPlacement } from './assetsM
 
 export const editorState = {
   active: true,
-  brushType: 'grass', // 'grass'|'sand'|'road'|'water'|'raise'|'lower'|'smooth'|'rock'|'tree_stamp'|'tree_cluster'|'tree_eraser'
+  brushType: 'grass', // 'grass'|'no_grass'|'sand'|'road'|'water'|'raise'|'lower'|'smooth'|'rock'|'tree_stamp'|'tree_cluster'|'tree_eraser'
   treeType: 'conifer', // 'conifer'|'broad'
   brushRadius: 10.0,
   brushStrength: 0.45,
@@ -34,11 +35,13 @@ const mouse = new THREE.Vector2();
 
 export function setupTerrainEditor(scene, camera, domElement, glbHandle = null) {
   const tex = getTerrainDataTexture();
+  const grassMaskTex = getGrassMaskTexture();
   const groundMesh = getGroundMesh();
   if (!groundMesh || !tex) return null;
   const placeGlbAt = glbHandle ? glbHandle.placeAt : null;
 
   const data = tex.image.data;
+  const maskData = grassMaskTex.image.data;
   const texSize = tex.image.width; // 512
   const geo = groundMesh.geometry;
   const posAttr = geo.attributes.position;
@@ -62,6 +65,7 @@ export function setupTerrainEditor(scene, camera, domElement, glbHandle = null) 
   // Brush color mapping for ring visual
   const brushColorMap = {
     grass: 0x7ef088,
+    no_grass: 0xa3e635,
     sand: 0xf2d680,
     road: 0xb5885c,
     water: 0x38bdf8,
@@ -143,27 +147,38 @@ export function setupTerrainEditor(scene, camera, domElement, glbHandle = null) 
           cr = THREE.MathUtils.lerp(cr, cGrassLush.r, w);
           cg = THREE.MathUtils.lerp(cg, cGrassLush.g, w);
           cb = THREE.MathUtils.lerp(cb, cGrassLush.b, w);
+          maskData[iy * texSize + ix] = THREE.MathUtils.lerp(maskData[iy * texSize + ix], 1.0, w);
+        } else if (bType === 'no_grass') {
+          // Green Ground where grass is absent (lawn / crop / courtyard)
+          cr = THREE.MathUtils.lerp(cr, cGrassWarm.r, w);
+          cg = THREE.MathUtils.lerp(cg, cGrassWarm.g, w);
+          cb = THREE.MathUtils.lerp(cb, cGrassWarm.b, w);
+          maskData[iy * texSize + ix] = THREE.MathUtils.lerp(maskData[iy * texSize + ix], 0.0, w);
         } else if (bType === 'sand') {
           // Beach / Sand (culls grass)
           cr = THREE.MathUtils.lerp(cr, cSand.r, w);
           cg = THREE.MathUtils.lerp(cg, cSand.g, w);
           cb = THREE.MathUtils.lerp(cb, cSand.b, w);
+          maskData[iy * texSize + ix] = THREE.MathUtils.lerp(maskData[iy * texSize + ix], 0.0, w);
         } else if (bType === 'road') {
           // Earthen Road / Trail (culls grass)
           cr = THREE.MathUtils.lerp(cr, cPath.r, w);
           cg = THREE.MathUtils.lerp(cg, cPath.g, w);
           cb = THREE.MathUtils.lerp(cb, cPath.b, w);
+          maskData[iy * texSize + ix] = THREE.MathUtils.lerp(maskData[iy * texSize + ix], 0.0, w);
         } else if (bType === 'rock') {
           // Rugged Rock Cliff (culls grass)
           cr = THREE.MathUtils.lerp(cr, cRock.r, w);
           cg = THREE.MathUtils.lerp(cg, cRock.g, w);
           cb = THREE.MathUtils.lerp(cb, cRock.b, w);
+          maskData[iy * texSize + ix] = THREE.MathUtils.lerp(maskData[iy * texSize + ix], 0.0, w);
         } else if (bType === 'water') {
           // Lower into water basin & paint turquoise
           curH = THREE.MathUtils.lerp(curH, -1.8, w * 0.65);
           cr = THREE.MathUtils.lerp(cr, cSeaShallow.r, w);
           cg = THREE.MathUtils.lerp(cg, cSeaShallow.g, w);
           cb = THREE.MathUtils.lerp(cb, cSeaShallow.b, w);
+          maskData[iy * texSize + ix] = THREE.MathUtils.lerp(maskData[iy * texSize + ix], 0.0, w);
           modifiedHeights = true;
         } else if (bType === 'raise') {
           curH += w * 1.8;
@@ -189,6 +204,7 @@ export function setupTerrainEditor(scene, camera, domElement, glbHandle = null) 
       }
     }
     tex.needsUpdate = true;
+    grassMaskTex.needsUpdate = true;
 
     // 2. Update Ground 3D Mesh Geometry (Positions & Vertex Colors)
     const vCount = posAttr.count;
@@ -208,6 +224,10 @@ export function setupTerrainEditor(scene, camera, domElement, glbHandle = null) 
         vr = THREE.MathUtils.lerp(vr, cGrassLush.r, w);
         vg = THREE.MathUtils.lerp(vg, cGrassLush.g, w);
         vb = THREE.MathUtils.lerp(vb, cGrassLush.b, w);
+      } else if (bType === 'no_grass') {
+        vr = THREE.MathUtils.lerp(vr, cGrassWarm.r, w);
+        vg = THREE.MathUtils.lerp(vg, cGrassWarm.g, w);
+        vb = THREE.MathUtils.lerp(vb, cGrassWarm.b, w);
       } else if (bType === 'sand') {
         vr = THREE.MathUtils.lerp(vr, cSand.r, w);
         vg = THREE.MathUtils.lerp(vg, cSand.g, w);

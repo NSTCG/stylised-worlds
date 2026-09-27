@@ -212,7 +212,7 @@ export function setupControls(camera, domElement, onTogglePostProcessing) {
         camera.position.copy(player.pos);
         camera.rotation.set(player.pitch, player.yaw, 0, 'YXZ');
       }
-    } else {
+    } else if (controls.enabled) {
       // In Orbit mode, WASD smoothly navigates the camera / orbit target
       const moveX = (keys.d ? 1 : 0) - (keys.a ? 1 : 0);
       const moveZ = (keys.s ? 1 : 0) - (keys.w ? 1 : 0);

@@ -190,6 +190,122 @@ export function getTerrainDataTexture(size = 512) {
   return tex;
 }
 
+let _cachedGrassMaskTexture = null;
+
+export function getGrassMaskTexture(size = 512) {
+  if (_cachedGrassMaskTexture) return _cachedGrassMaskTexture;
+
+  const data = new Float32Array(size * size);
+  data.fill(1.0); // Default: 1.0 (grass allowed everywhere)
+
+  const tex = new THREE.DataTexture(data, size, size, THREE.RedFormat, THREE.FloatType);
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.wrapS = THREE.ClampToEdgeWrapping;
+  tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.generateMipmaps = false;
+  tex.needsUpdate = true;
+
+  _cachedGrassMaskTexture = tex;
+  return tex;
+}
+
+export function getGrassMask(x, z) {
+  const tex = _cachedGrassMaskTexture;
+  if (!tex || !tex.image || !tex.image.data) return 1.0;
+
+  const minX = TERRAIN_BOUNDS.x, minZ = TERRAIN_BOUNDS.y;
+  const sizeX = TERRAIN_BOUNDS.z, sizeZ = TERRAIN_BOUNDS.w;
+  const u = (x - minX) / sizeX;
+  const v = (z - minZ) / sizeZ;
+  if (u < 0 || u > 1 || v < 0 || v > 1) return 1.0;
+
+  const size = tex.image.width;
+  const ix = Math.floor(u * (size - 1));
+  const iy = Math.floor(v * (size - 1));
+  return tex.image.data[iy * size + ix];
+}
+
+export function setGrassMaskInRadius(cx, cz, radius, targetVal = 0.0, feather = true) {
+  const tex = getGrassMaskTexture();
+  const data = tex.image.data;
+  const size = tex.image.width;
+  const minX = TERRAIN_BOUNDS.x, minZ = TERRAIN_BOUNDS.y;
+  const sizeX = TERRAIN_BOUNDS.z, sizeZ = TERRAIN_BOUNDS.w;
+
+  const uMin = Math.max(0, (cx - radius - minX) / sizeX);
+  const uMax = Math.min(1, (cx + radius - minX) / sizeX);
+  const vMin = Math.max(0, (cz - radius - minZ) / sizeZ);
+  const vMax = Math.min(1, (cz + radius - minZ) / sizeZ);
+
+  const pxMin = Math.floor(uMin * (size - 1));
+  const pxMax = Math.ceil(uMax * (size - 1));
+  const pyMin = Math.floor(vMin * (size - 1));
+  const pyMax = Math.ceil(vMax * (size - 1));
+
+  for (let iy = pyMin; iy <= pyMax; iy++) {
+    const pz = minZ + (iy / (size - 1)) * sizeZ;
+    for (let ix = pxMin; ix <= pxMax; ix++) {
+      const px = minX + (ix / (size - 1)) * sizeX;
+      const d = Math.hypot(px - cx, pz - cz);
+      if (d > radius) continue;
+
+      const idx = iy * size + ix;
+      if (feather) {
+        const w = Math.cos((d / radius) * (Math.PI * 0.5));
+        data[idx] = THREE.MathUtils.lerp(data[idx], targetVal, w);
+      } else {
+        data[idx] = targetVal;
+      }
+    }
+  }
+  tex.needsUpdate = true;
+}
+
+export function setGrassMaskInBox(bMinX, bMinZ, bMaxX, bMaxZ, targetVal = 0.0, feather = 1.0) {
+  const tex = getGrassMaskTexture();
+  const data = tex.image.data;
+  const size = tex.image.width;
+  const minX = TERRAIN_BOUNDS.x, minZ = TERRAIN_BOUNDS.y;
+  const sizeX = TERRAIN_BOUNDS.z, sizeZ = TERRAIN_BOUNDS.w;
+
+  const uMin = Math.max(0, (bMinX - feather - minX) / sizeX);
+  const uMax = Math.min(1, (bMaxX + feather - minX) / sizeX);
+  const vMin = Math.max(0, (bMinZ - feather - minZ) / sizeZ);
+  const vMax = Math.min(1, (bMaxZ + feather - minZ) / sizeZ);
+
+  const pxMin = Math.floor(uMin * (size - 1));
+  const pxMax = Math.ceil(uMax * (size - 1));
+  const pyMin = Math.floor(vMin * (size - 1));
+  const pyMax = Math.ceil(vMax * (size - 1));
+
+  for (let iy = pyMin; iy <= pyMax; iy++) {
+    const pz = minZ + (iy / (size - 1)) * sizeZ;
+    for (let ix = pxMin; ix <= pxMax; ix++) {
+      const px = minX + (ix / (size - 1)) * sizeX;
+      let dx = 0;
+      if (px < bMinX) dx = bMinX - px;
+      else if (px > bMaxX) dx = px - bMaxX;
+
+      let dz = 0;
+      if (pz < bMinZ) dz = bMinZ - pz;
+      else if (pz > bMaxZ) dz = pz - bMaxZ;
+
+      const dist = Math.hypot(dx, dz);
+      if (dist > feather) continue;
+
+      const idx = iy * size + ix;
+      if (feather > 0) {
+        const w = 1.0 - dist / feather;
+        data[idx] = THREE.MathUtils.lerp(data[idx], targetVal, w);
+      } else {
+        data[idx] = targetVal;
+      }
+    }
+  }
+  tex.needsUpdate = true;
+}
+
 let _cachedGroundMesh = null;
 
 export function getGroundMesh() {
@@ -220,4 +336,3 @@ export function createGround(scene) {
   _cachedGroundMesh = ground;
   return ground;
 }
-

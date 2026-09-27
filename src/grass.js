@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { windUniforms } from './wind.js';
-import { getTerrainDataTexture, TERRAIN_BOUNDS } from './terrain.js';
+import { getTerrainDataTexture, getGrassMaskTexture, TERRAIN_BOUNDS } from './terrain.js';
 
 export const grassConfig = {
   maxPool: 180000,
@@ -18,6 +18,7 @@ export const grassUniforms = {
   uGrassHeightScale: { value: 1.0 },
   uGrassColor:       { value: new THREE.Color(0x4ca03e) },
   uTerrainDataMap:   { value: null },
+  uGrassMaskMap:     { value: getGrassMaskTexture() },
   uTerrainBounds:    { value: TERRAIN_BOUNDS }
 };
 
@@ -62,6 +63,7 @@ function addGpuGrassShader(material, bladeHeight = 1.20) {
     shader.uniforms.uGrassHeightScale = grassUniforms.uGrassHeightScale;
     shader.uniforms.uGrassColor = grassUniforms.uGrassColor;
     shader.uniforms.uTerrainDataMap = grassUniforms.uTerrainDataMap;
+    shader.uniforms.uGrassMaskMap = grassUniforms.uGrassMaskMap;
     shader.uniforms.uTerrainBounds = grassUniforms.uTerrainBounds;
 
     shader.vertexShader = `
@@ -71,6 +73,7 @@ function addGpuGrassShader(material, bladeHeight = 1.20) {
       uniform float uGrassHeightScale;
       uniform vec3 uGrassColor;
       uniform sampler2D uTerrainDataMap;
+      uniform sampler2D uGrassMaskMap;
       uniform vec4 uTerrainBounds;
 
       attribute vec2 aGrassBase;
@@ -146,9 +149,10 @@ function addGpuGrassShader(material, bladeHeight = 1.20) {
           vec3 tc = mapSample.gba;
           vTerrainColor = tc;
           float greenness = clamp((tc.g - tc.r) / 0.18, 0.0, 1.0);
+          float maskVal = texture2D(uGrassMaskMap, clamp(terrainUV, 0.0, 1.0)).r;
 
-          // Full biome cutoff logic on GPU: grows on painted green grass, culled on road/sand/water/steep heights
-          bool discardBlade = (yGround < 0.02) || (yGround > 15.0) || (greenness <= 0.04) || (aGrassSeed.x > pow(greenness, 1.4)) || (radScale <= 0.001);
+          // Full biome cutoff logic on GPU: grows on painted green grass, culled on road/sand/water/steep heights/paintable mask
+          bool discardBlade = (yGround < 0.02) || (yGround > 15.0) || (greenness <= 0.04) || (maskVal < 0.5) || (aGrassSeed.x > pow(greenness, 1.4)) || (radScale <= 0.001);
 
           if (discardBlade) {
             transformed = vec3(0.0);
