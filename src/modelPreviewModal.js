@@ -342,6 +342,47 @@ function _initThreePreview() {
   _previewControls.dampingFactor = 0.08;
   _previewControls.autoRotate = true;
   _previewControls.autoRotateSpeed = 1.2;
+  _previewControls.screenSpacePanning = true;
+  _previewControls.mouseButtons = {
+    LEFT: THREE.MOUSE.ROTATE,
+    MIDDLE: THREE.MOUSE.PAN,
+    RIGHT: THREE.MOUSE.ROTATE
+  };
+  let _isPreviewMiddleDown = false;
+  let _wasAutoRotateBeforePan = false;
+  _previewRenderer.domElement.addEventListener('pointerdown', (e) => {
+    if (e.button === 1) {
+      e.preventDefault();
+      _isPreviewMiddleDown = true;
+      _previewControls.enableRotate = false;
+      _previewControls.enablePan = true;
+      if (_previewControls.autoRotate) {
+        _wasAutoRotateBeforePan = true;
+        _previewControls.autoRotate = false;
+      }
+      try {
+        Object.defineProperty(e, 'shiftKey', { get: () => false, configurable: true });
+        Object.defineProperty(e, 'ctrlKey', { get: () => false, configurable: true });
+        Object.defineProperty(e, 'metaKey', { get: () => false, configurable: true });
+        Object.defineProperty(e, 'altKey', { get: () => false, configurable: true });
+      } catch (_) {}
+    }
+  }, { capture: true });
+
+  window.addEventListener('pointerup', (e) => {
+    if (e.button === 1 || _isPreviewMiddleDown) {
+      _isPreviewMiddleDown = false;
+      _previewControls.enableRotate = true;
+      if (_wasAutoRotateBeforePan && _autoRotate) {
+        _previewControls.autoRotate = true;
+        _wasAutoRotateBeforePan = false;
+      }
+    }
+  }, { capture: true });
+
+  _previewRenderer.domElement.addEventListener('auxclick', (e) => {
+    if (e.button === 1) e.preventDefault();
+  });
 
   // Studio Lighting
   const ambLight = new THREE.AmbientLight(0xffffff, 0.85);

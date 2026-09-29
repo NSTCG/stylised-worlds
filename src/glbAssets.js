@@ -132,14 +132,7 @@ export function applyGlbData(data) {
     const clone = entry.scene.clone(true);
     const id = `glb_${p.name}_${_nextId++}`;
     clone.name = id;
-    clone.traverse((o) => {
-      if (o.isMesh && o.material) {
-        const mats = Array.isArray(o.material) ? o.material : [o.material];
-        for (const m of mats) applyAtmosphericFog(m);
-        o.castShadow = true;
-        o.receiveShadow = true;
-      }
-    });
+    setupModelMaterials(clone, { blendDistance: 0.35, blendStrength: 0.85 });
     const M = new THREE.Matrix4().fromArray(p.m);
     clone.applyMatrix4(M);
     scene.add(clone);
@@ -239,14 +232,7 @@ export function duplicateGlbPlacement(object) {
   const id = `glb_${assetName}_${_nextId++}`;
   clone.name = id;
 
-  clone.traverse((o) => {
-    if (o.isMesh && o.material) {
-      const mats = Array.isArray(o.material) ? o.material : [o.material];
-      for (const m of mats) applyAtmosphericFog(m);
-      o.castShadow = true;
-      o.receiveShadow = true;
-    }
-  });
+  setupModelMaterials(clone, { blendDistance: 0.35, blendStrength: 0.85 });
 
   const pos = new THREE.Vector3();
   const rot = new THREE.Quaternion();

@@ -20,7 +20,7 @@ import { rebuildTreesPCG, placeTreeAt, sampleTreeCluster, eraseTreesInRadius } f
 import { placementState, updateGhostPosition, confirmPlacement } from './assetsManager.js';
 
 export const editorState = {
-  active: true,
+  active: false,
   brushType: 'grass', // 'grass'|'no_grass'|'sand'|'road'|'water'|'raise'|'lower'|'smooth'|'rock'|'tree_stamp'|'tree_cluster'|'tree_eraser'
   treeType: 'conifer', // 'conifer'|'broad'
   brushRadius: 10.0,
@@ -84,6 +84,12 @@ export function setupTerrainEditor(scene, camera, domElement, glbHandle = null) 
 
   // ---------------------------------------------------------- Raycasting
   function raycastTerrain(event) {
+    if (!editorState.active) {
+      editorState.hasHit = false;
+      brushRing.visible = false;
+      return false;
+    }
+
     const rect = domElement.getBoundingClientRect();
     mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
     mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
@@ -276,6 +282,7 @@ export function setupTerrainEditor(scene, camera, domElement, glbHandle = null) 
   // ---------------------------------------------------------- Mouse Event Listeners
   domElement.addEventListener('pointerdown', (e) => {
     if (e.button === 0) { // Left click
+      if (!editorState.active) return;
       const hit = raycastTerrain(e);
       if (hit) {
         if (placementState.active) {
@@ -298,6 +305,10 @@ export function setupTerrainEditor(scene, camera, domElement, glbHandle = null) 
   });
 
   window.addEventListener('pointermove', (e) => {
+    if (!editorState.active) {
+      brushRing.visible = false;
+      return;
+    }
     const hit = raycastTerrain(e);
     if (placementState.active && hit) {
       updateGhostPosition(editorState.hitPoint.x, editorState.hitPoint.z);
@@ -456,11 +467,47 @@ export function setupTerrainEditor(scene, camera, domElement, glbHandle = null) 
   document.getElementById('pcgAutoTreesBtn')?.addEventListener('click', rebuildTreesPCG);
   document.getElementById('pcgResetBtn')?.addEventListener('click', pcgResetDefault);
 
+  // Brush Active Toggle
+  function setBrushActive(active) {
+    editorState.active = !!active;
+    if (!editorState.active) {
+      editorState.isPainting = false;
+      editorState.hasHit = false;
+      brushRing.visible = false;
+    }
+    _syncBrushToggleUI();
+  }
+
+  function toggleBrushActive() {
+    setBrushActive(!editorState.active);
+    return editorState.active;
+  }
+
+  function _syncBrushToggleUI() {
+    const btns = document.querySelectorAll('.toggle-brush-btn');
+    btns.forEach(b => {
+      b.classList.toggle('active', editorState.active);
+      b.innerHTML = editorState.active ? '<span>🖌️</span> Brush: ON' : '<span>🖌️</span> Brush: OFF';
+      b.style.background = editorState.active ? 'rgba(126, 240, 136, 0.35)' : 'rgba(255, 255, 255, 0.12)';
+      b.style.borderColor = editorState.active ? '#7ef088' : 'rgba(255, 255, 255, 0.22)';
+      b.style.color = editorState.active ? '#fff' : 'rgba(235, 245, 225, 0.7)';
+    });
+  }
+
+  document.querySelectorAll('.toggle-brush-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      toggleBrushActive();
+    });
+  });
+
   updateBrushColor();
+  _syncBrushToggleUI();
 
   return {
     editorState,
     setBrush,
+    setBrushActive,
+    toggleBrushActive,
     pcgGenerateNewWorld,
     pcgResetDefault,
     brushRing,

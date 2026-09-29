@@ -20,10 +20,18 @@ import { setupTransformManager, selectObject } from './transformManager.js';
 import { setupAssetBrowser, toggleAssetBrowser } from './assetBrowser.js';
 import { getAssetById } from './assetCatalog.js';
 import { openModelPreviewModal } from './modelPreviewModal.js';
-import { buildWhisperingValley } from './whisperingValleyScene.js';
+import { buildWhisperingValley, upgradeValleyPrototypesToMesh, updateFarmstead } from './whisperingValleyScene.js';
 import { VRMCharacterController } from './vrmController.js';
+import { toggleOutline, setOutlineEnabled, setOutlineMode, getOutlineMode, cycleOutlineMode, attachOutlinesToScene } from './outlineEffect.js';
 
 window.setGrassHeightScale = setGrassHeightScale;
+window.setOutlineMode = (mode) => setOutlineMode(scene, mode);
+window.getOutlineMode = () => getOutlineMode();
+window.toggleOutline = (modeOrBool) => {
+  if (typeof modeOrBool === 'string') return setOutlineMode(scene, modeOrBool);
+  if (typeof modeOrBool === 'boolean') return setOutlineEnabled(scene, modeOrBool);
+  return cycleOutlineMode(scene);
+};
 
 /* ---------------------------------------------------------- renderer & scene */
 const app = document.getElementById('app');
@@ -42,10 +50,12 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 600);
 camera.position.set(21, 5.5, 25);
 
+const clock = new THREE.Clock();
 window.THREE = THREE;
 window.scene = scene;
 window.camera = camera;
 window.renderer = renderer;
+window.clock = clock;
 
 /* ---------------------------------------------------------- world modules */
 const { updateEnvironment, envConfig } = setupEnvironment(scene);
@@ -80,7 +90,27 @@ const transformManager = setupTransformManager(scene, camera, renderer.domElemen
 window.transformManager = transformManager;
 window.selectObject = selectObject;
 
-const { cameraRig, updateVR, recordFps } = setupVR(renderer, scene, camera, player, isWalkMode, controls, {
+// Edit Mode Toggle: enables clicking/scaling/rotating/moving all models (props, bridges, houses)
+const editModeBtn = document.getElementById('editModeToggleBtn');
+function _syncEditModeUI() {
+  if (!editModeBtn) return;
+  const on = transformManager.getEditMode?.() ?? false;
+  editModeBtn.innerHTML = on ? '<span>✋</span> Edit: ON' : '<span>✋</span> Edit: OFF';
+  editModeBtn.style.background = on ? 'rgba(56, 189, 248, 0.4)' : 'rgba(255, 255, 255, 0.12)';
+  editModeBtn.style.borderColor = on ? '#38bdf8' : 'rgba(255, 255, 255, 0.22)';
+  editModeBtn.style.color = on ? '#fff' : 'rgba(235, 245, 225, 0.7)';
+}
+editModeBtn?.addEventListener('click', () => {
+  transformManager.setEditMode(!transformManager.getEditMode());
+  _syncEditModeUI();
+});
+_syncEditModeUI();
+
+// Cel Outline Toggle (No Post-Processing Inverted Hull - Off by default)
+document.getElementById('outlineBtn')?.addEventListener('click', () => toggleOutline(scene));
+document.getElementById('sideOutlineBtn')?.addEventListener('click', () => toggleOutline(scene));
+
+const vrManager = setupVR(renderer, scene, camera, player, isWalkMode, controls, {
   editorState: terrainEditor.editorState,
   setBrush: terrainEditor.setBrush,
   applyBrushAt: terrainEditor.applyBrushAt,
@@ -88,7 +118,13 @@ const { cameraRig, updateVR, recordFps } = setupVR(renderer, scene, camera, play
   placeGlbAt: placeGlbWithSelection,
   save: () => saveLevel(_glbApi)
 });
+const { cameraRig, updateVR, recordFps, toggleVRCanvasUI } = vrManager;
 
+// In-VR Canvas UI Toggle (Off by default for clean view & maximum Quest performance)
+document.getElementById('vrCanvasUIBtn')?.addEventListener('click', () => toggleVRCanvasUI());
+document.getElementById('sideVrCanvasUIBtn')?.addEventListener('click', () => toggleVRCanvasUI());
+
+window.vrManager = vrManager;
 window.player = player;
 window.controls = controls;
 window.cameraRig = cameraRig;
@@ -99,6 +135,34 @@ window.vrmController = vrmController;
 
 // Auto-load high quality VRoid Avatar
 vrmController.loadVRM();
+
+// Avatar Model Switcher Buttons
+const btnAlicia = document.getElementById('avatarAliciaBtn');
+const btnSampleB = document.getElementById('avatarSampleBBtn');
+const btnSeedSan = document.getElementById('avatarSeedSanBtn');
+const btnCustomVrm = document.getElementById('customVrmBtn');
+
+btnAlicia?.addEventListener('click', () => vrmController.selectAvatar('alicia'));
+btnSampleB?.addEventListener('click', () => vrmController.selectAvatar('avatar_b'));
+btnSeedSan?.addEventListener('click', () => vrmController.selectAvatar('seed_san'));
+btnCustomVrm?.addEventListener('click', () => document.getElementById('vrmFileInput')?.click());
+
+window.addEventListener('vrmAvatarChanged', (e) => {
+  const { avatarId, avatarName, stats } = e.detail;
+  btnAlicia?.classList.toggle('active', avatarId === 'alicia');
+  btnSampleB?.classList.toggle('active', avatarId === 'avatar_b');
+  btnSeedSan?.classList.toggle('active', avatarId === 'seed_san');
+
+  const statsBadge = document.getElementById('vrmCompressionStatsBadge');
+  if (statsBadge) {
+    if (stats) {
+      statsBadge.style.display = 'block';
+      statsBadge.textContent = `⚡ ${avatarName}: ${stats.origSizeMB}MB → ${stats.newSizeMB}MB (Saved ${stats.savingsPercent}%)`;
+    } else {
+      statsBadge.style.display = 'none';
+    }
+  }
+});
 
 // Hook Ground Blend Slider
 const groundBlendSlider = document.getElementById('groundBlendSlider');
@@ -135,12 +199,13 @@ window.waterUniforms = waterUniforms;
 const timeOfDaySlider = document.getElementById('timeOfDaySlider');
 if (timeOfDaySlider) {
   timeOfDaySlider.addEventListener('input', (e) => {
-    envConfig.timeOfDay = Number(e.target.value) / 100;
+    const val = Number(e.target.value);
+    envConfig.timeOfDay = val > 1.0 ? val / 100 : val;
+    envConfig.autoCycle = false; // Pause while scrubbing
     updateEnvironment(clock.getElapsedTime(), 0);
     renderer.render(scene, camera);
   });
   timeOfDaySlider.addEventListener('pointerdown', () => { envConfig.autoCycle = false; });
-  timeOfDaySlider.addEventListener('pointerup', () => { envConfig.autoCycle = true; });
 }
 
 const timeCycleBtn = document.getElementById('timeCycleBtn');
@@ -156,11 +221,14 @@ const fogDensitySlider = document.getElementById('fogDensitySlider');
 if (fogDensitySlider) {
   fogDensitySlider.addEventListener('input', (e) => {
     const val = Number(e.target.value);
-    envConfig.fogBaseDensity = val * 0.001;
+    envConfig.fogBaseDensity = val < 0.1 ? val : val * 0.001;
+    if (scene.fog) scene.fog.density = envConfig.fogBaseDensity;
     updateEnvironment(clock.getElapsedTime(), 0);
     renderer.render(scene, camera);
   });
 }
+
+window.updateEnvironment = (t, dt) => updateEnvironment(t, dt);
 /* ---------------------------------------------------------- tree paint colors */
 const _treeColorIds = {
   barkBottom: 'treeColorBarkBottom',
@@ -345,45 +413,64 @@ window.loadLevelFromStorage = () => loadLevelFromStorage(_glbApi);
 window.buildLevelJson = () => buildLevelJson(_glbApi);
 window.envConfig = envConfig;
 
-// Hook Whispering Valley Level 1 quick map
+// Hook Whispering Valley Level 1 quick map & model upgrade
 const whisperingValleyBtn = document.getElementById('whisperingValleyBtn');
 if (whisperingValleyBtn) {
   whisperingValleyBtn.addEventListener('click', () => {
     buildWhisperingValley(scene, camera, controls);
   });
 }
+const upgradeValleyModelsBtn = document.getElementById('upgradeValleyModelsBtn');
+if (upgradeValleyModelsBtn) {
+  upgradeValleyModelsBtn.addEventListener('click', () => {
+    upgradeValleyPrototypesToMesh(scene, camera, controls);
+  });
+}
 window.buildWhisperingValley = () => buildWhisperingValley(scene, camera, controls);
+window.upgradeValleyPrototypesToMesh = () => upgradeValleyPrototypesToMesh(scene, camera, controls);
 
 // Auto-build Whispering Valley scene on launch for immediate testing
 setTimeout(() => {
   buildWhisperingValley(scene, camera, controls);
 }, 600);
 
-// Hook Side Panel Collapsing & Visibility
+// Hook Side Panel Collapsing into Gear Icon & Visibility
 const sidePanel = document.getElementById('sideControlsPanel');
 const collapseSidePanelBtn = document.getElementById('collapseSidePanelBtn');
+const gearToggleBtn = document.getElementById('gearToggleBtn');
 const toggleSideBtn = document.getElementById('toggleSideBtn');
 
-if (collapseSidePanelBtn && sidePanel) {
-  collapseSidePanelBtn.addEventListener('click', () => {
-    sidePanel.classList.toggle('collapsed');
-    collapseSidePanelBtn.textContent = sidePanel.classList.contains('collapsed') ? '+' : '—';
-  });
+function setSidePanelOpen(open) {
+  if (!sidePanel) return;
+  if (open) {
+    sidePanel.classList.remove('collapsed');
+    sidePanel.classList.remove('hidden');
+    if (gearToggleBtn) gearToggleBtn.style.display = 'none';
+  } else {
+    sidePanel.classList.add('collapsed');
+    if (gearToggleBtn) gearToggleBtn.style.display = 'flex';
+  }
 }
 
-if (toggleSideBtn && sidePanel) {
-  toggleSideBtn.addEventListener('click', () => {
-    if (sidePanel.classList.contains('collapsed')) {
-      sidePanel.classList.remove('collapsed');
-      if (collapseSidePanelBtn) collapseSidePanelBtn.textContent = '—';
-    } else {
-      sidePanel.classList.toggle('hidden');
-    }
-  });
+function toggleSidePanel() {
+  const isClosed = sidePanel ? (sidePanel.classList.contains('collapsed') || sidePanel.classList.contains('hidden')) : false;
+  setSidePanelOpen(isClosed);
 }
+
+gearToggleBtn?.addEventListener('click', () => setSidePanelOpen(true));
+collapseSidePanelBtn?.addEventListener('click', () => setSidePanelOpen(false));
+toggleSideBtn?.addEventListener('click', toggleSidePanel);
+
+// Shortcut: Tab or E key to toggle editor controls (when not typing in an input)
+window.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+  if (e.key === 'Tab' || e.key === 'e' || e.key === 'E') {
+    e.preventDefault();
+    toggleSidePanel();
+  }
+});
 
 /* ---------------------------------------------------------- main loop */
-const clock = new THREE.Clock();
 let frame = 0;
 const _userPos = new THREE.Vector3();
 
@@ -395,6 +482,11 @@ function tick() {
 
   // Update dynamic Day / Night cycle (Sun, Moon, Stars, drifting Clouds, Fog, Lighting)
   updateEnvironment(t, dt);
+
+  // Sync In-VR / Desktop Env tab with live dynamic cycle
+  if (vrManager?.vrUI?.state?.tab === 'env' && frame % 30 === 0 && envConfig.autoCycle) {
+    vrManager.vrUI.renderUI();
+  }
 
   // Bake static shadow map on initial frames, then freeze for maximum Quest performance
   if (frame <= 3) {
@@ -417,6 +509,9 @@ function tick() {
   // Animated elements
   updateFireflies(t);
   updateWater(t, frame, renderer);
+
+  // Farmstead dynamic elements (weathervane)
+  updateFarmstead(t);
 
   // Periodic triangle stats refresh
   if (frame % 60 === 0) {

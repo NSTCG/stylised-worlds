@@ -3,6 +3,10 @@ import * as THREE from 'three';
 export const windUniforms = { uTime: { value: 0 } };
 
 export function addWind(material, strength, phaseScale = 1) {
+  material.userData = material.userData || {};
+  material.userData.hasWind = true;
+  material.userData.windStrength = strength;
+  material.userData.windPhaseScale = phaseScale;
   const f = (n) => {
     const s = String(n);
     return s.includes('.') || s.includes('e') ? s : s + '.0';

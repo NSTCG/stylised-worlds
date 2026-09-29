@@ -39,8 +39,23 @@ export function setupStats(scene, renderer) {
 
     scene.traverse((obj) => {
       if (!obj.isMesh && !obj.isInstancedMesh) return;
+      if (!obj.visible) return;
+      let p = obj.parent;
+      let parentVisible = true;
+      while (p) {
+        if (!p.visible) { parentVisible = false; break; }
+        p = p.parent;
+      }
+      if (!parentVisible) return;
+
       const tris = Math.round(getMeshTriangles(obj));
       if (tris <= 0) return;
+
+      if (obj.userData?.isOutlineMesh) {
+        stats.outlines = (stats.outlines || 0) + tris;
+        stats.total += tris;
+        return;
+      }
 
       const name = obj.name || '';
       if (name === 'grass_instanced' || name.startsWith('grass')) {
@@ -60,7 +75,7 @@ export function setupStats(scene, renderer) {
       }
     });
 
-    stats.total = stats.grass + stats.trees + stats.terrain + stats.water + stats.rocks + stats.mountain + stats.other;
+    stats.total = stats.grass + stats.trees + stats.terrain + stats.water + stats.rocks + stats.mountain + stats.other + (stats.outlines || 0);
     return stats;
   }
 
@@ -95,6 +110,10 @@ export function setupStats(scene, renderer) {
         <span class="triChip" title="Craggy Background Mountain: ${stats.mountain.toLocaleString()} tris" style="background:rgba(90,100,105,0.35); border:1px solid rgba(160,175,185,0.5); padding:1px 6px; border-radius:8px;">
           🏔 Mountain: <b style="color:#e8edf0;">${formatNumber(stats.mountain)}</b>
         </span>
+        ${stats.outlines ? `
+        <span class="triChip" title="Inverted Hull Shell Outlines: ${stats.outlines.toLocaleString()} tris" style="background:rgba(56,189,248,0.35); border:1px solid rgba(56,189,248,0.6); padding:1px 6px; border-radius:8px;">
+          ✒️ Shell Outlines: <b style="color:#7dd3fc;">${formatNumber(stats.outlines)}</b>
+        </span>` : ''}
       `;
     }
   }

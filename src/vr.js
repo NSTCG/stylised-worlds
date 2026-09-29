@@ -64,11 +64,60 @@ export function setupVR(renderer, scene, camera, player, getIsWalkMode, controls
 
   function toggleFlyMode() {
     isFlyMode = !isFlyMode;
+    if (window.vrmController) {
+      window.vrmController.setVRDetached(isFlyMode);
+    }
     showNotification(
-      isFlyMode ? '🕊️ Fly Mode Active! Soar in 3D (Press X to Land)' : '🚶 Ground Walk Mode Active',
-      'success'
+      isFlyMode ? '🕊️ Camera Detached: Fly & Edit Map (Press X to Re-attach to Character)' : '👤 First-Person Character Control (Hands Mapped)',
+      'success',
+      2500
     );
     if (vrUI) vrUI.renderUI();
+  }
+
+  // ---------------------------------------------------------- In-VR Canvas UI Toggle (Off by default)
+  let vrCanvasUIEnabled = false;
+
+  function _syncVRCanvasUIButtons(enabled) {
+    const ids = ['vrCanvasUIBtn', 'sideVrCanvasUIBtn'];
+    for (const id of ids) {
+      const btn = document.getElementById(id);
+      if (btn) {
+        if (enabled) {
+          btn.textContent = '🥽 VR Canvas UI: ON';
+          btn.style.background = 'rgba(76, 160, 62, 0.65)';
+          btn.style.borderColor = '#7ef088';
+          btn.style.color = '#fff';
+        } else {
+          btn.textContent = '🥽 VR Canvas UI: OFF';
+          btn.style.background = 'rgba(255, 255, 255, 0.15)';
+          btn.style.borderColor = 'rgba(255, 255, 255, 0.35)';
+          btn.style.color = '#eaf2df';
+        }
+      }
+    }
+  }
+
+  function setVRCanvasUI(enabled) {
+    vrCanvasUIEnabled = !!enabled;
+    if (vrUI && vrUI.panelMesh) {
+      vrUI.panelMesh.visible = vrCanvasUIEnabled;
+      if (vrCanvasUIEnabled) {
+        repositionVRUI(false);
+      }
+    }
+    if (fpsPanel) {
+      fpsPanel.visible = vrCanvasUIEnabled;
+      if (vrCanvasUIEnabled) {
+        updateFpsCanvas(smoothedFps, smoothedMs);
+      }
+    }
+    _syncVRCanvasUIButtons(vrCanvasUIEnabled);
+    return vrCanvasUIEnabled;
+  }
+
+  function toggleVRCanvasUI() {
+    return setVRCanvasUI(!vrCanvasUIEnabled);
   }
 
   // ---------------------------------------------------------- Interactive In-VR Tablet UI
@@ -80,13 +129,19 @@ export function setupVR(renderer, scene, camera, player, getIsWalkMode, controls
     () => isFlyMode
   );
 
-  // Position tablet comfortably in front of user view
+  // Position tablet comfortably in front of user view (Hidden by default)
   vrUI.panelMesh.position.set(0, 1.25, -1.15);
   vrUI.panelMesh.rotation.set(-0.15, 0, 0);
+  vrUI.panelMesh.visible = false;
 
   // Reposition UI tablet in front of player when summoned
-  function repositionVRUI() {
-    vrUI.panelMesh.visible = true;
+  function repositionVRUI(makeVisible = true) {
+    if (makeVisible) {
+      vrCanvasUIEnabled = true;
+      vrUI.panelMesh.visible = true;
+      if (fpsPanel) fpsPanel.visible = true;
+      _syncVRCanvasUIButtons(true);
+    }
     const fwd = new THREE.Vector3(0, 0, -1);
     const xrCam = renderer.xr.getCamera ? renderer.xr.getCamera() : camera;
     if (xrCam && xrCam.quaternion) {
@@ -136,47 +191,66 @@ export function setupVR(renderer, scene, camera, player, getIsWalkMode, controls
     return hits.length ? hits[0].point : null;
   }
 
-  let isSqueezePainting = false;
+  let isTriggerPressedOnUI = false;
 
   // Bind Controller Triggers & Grips for World Editing
   function bindControllerActions(controller) {
     // Trigger Press (Selectstart)
     controller.addEventListener('selectstart', () => {
-      // 1. Check if clicking on In-VR UI tablet
-      const uiHit = vrUI.raycastUI(controller);
-      if (uiHit) {
-        vrUI.triggerClick();
-        return;
+      // 1. Check if clicking on In-VR UI tablet (only when active & visible)
+      if (vrCanvasUIEnabled && vrUI.panelMesh.visible) {
+        const uiHit = vrUI.raycastUI(controller);
+        if (uiHit) {
+          isTriggerPressedOnUI = true;
+          vrUI.handlePointerDown(uiHit.x, uiHit.y);
+          return;
+        }
       }
 
       // 2. Otherwise interact with world / terrain
+      if (placementState.active) {
+        const hit = getControllerGroundHit(controller);
+        if (hit) confirmPlacement(hit.x, hit.z);
+        return;
+      }
+
+      // If terrain brush is disabled, do NOT paint, sculpt, or stamp trees!
+      const brushActive = !!window.terrainEditor?.editorState?.active;
+      if (!brushActive) return;
+
       const hit = getControllerGroundHit(controller);
       if (!hit) return;
 
-      const tool = vrUI.state.activeTool;
-      if (tool === 'terrain') {
-        if (window.terrainEditor?.editorState) {
-          window.terrainEditor.editorState.brushRadius = vrUI.state.brushRadius || 10;
-        }
+      const bType = window.terrainEditor?.editorState?.brushType || 'grass';
+      if (bType === 'treeConifer') {
+        placeTreeAt(hit.x, hit.z, 'conifer');
+      } else if (bType === 'treeBroad') {
+        placeTreeAt(hit.x, hit.z, 'broad');
+      } else if (bType === 'tree_cluster') {
+        sampleTreeCluster(hit.x, hit.z, 6, 12.0, 'conifer');
+      } else if (bType === 'tree_eraser') {
+        eraseTreesInRadius(hit.x, hit.z, window.terrainEditor?.editorState?.brushRadius || 10);
+      } else if (bType === 'glb') {
+        if (placementState.active) confirmPlacement(hit.x, hit.z);
+      } else {
         if (editorApi?.applyBrushAt) {
           editorApi.applyBrushAt(hit.x, hit.z);
         }
-      } else if (tool === 'tree_stamp') {
-        const type = vrUI.state.selectedTreeType || 'conifer';
-        placeTreeAt(hit.x, hit.z, type);
-      } else if (tool === 'tree_cluster') {
-        const type = vrUI.state.selectedTreeType || 'conifer';
-        sampleTreeCluster(hit.x, hit.z, 6, 12.0, type);
-      } else if (tool === 'tree_eraser') {
-        eraseTreesInRadius(hit.x, hit.z, 6.0);
-      } else if (tool === 'prop_place') {
-        confirmPlacement(hit.x, hit.z);
+      }
+    });
+
+    controller.addEventListener('selectend', () => {
+      if (isTriggerPressedOnUI) {
+        isTriggerPressedOnUI = false;
+        vrUI.handlePointerUp();
       }
     });
 
     // Squeeze / Grip for continuous terrain sculpting
     controller.addEventListener('squeezestart', () => {
-      isSqueezePainting = true;
+      if (window.terrainEditor?.editorState?.active) {
+        isSqueezePainting = true;
+      }
     });
     controller.addEventListener('squeezeend', () => {
       isSqueezePainting = false;
@@ -203,9 +277,13 @@ export function setupVR(renderer, scene, camera, player, getIsWalkMode, controls
   );
   fpsPanel.position.set(0, 0.065, -0.04);
   fpsPanel.rotation.x = -Math.PI * 0.35;
+  fpsPanel.visible = false; // Off by default
   rightHandGroup.add(fpsPanel);
 
+  _syncVRCanvasUIButtons(false);
+
   function updateFpsCanvas(fps, ms) {
+    if (!vrCanvasUIEnabled) return; // Don't waste CPU/GPU canvas redrawing when disabled
     cxFps.clearRect(0, 0, 512, 256);
     cxFps.fillStyle = 'rgba(10, 16, 12, 0.92)';
     cxFps.beginPath();
@@ -279,7 +357,16 @@ export function setupVR(renderer, scene, camera, player, getIsWalkMode, controls
       } catch (e) {}
     }
 
-    if (getIsWalkMode()) {
+    // Default to first person character control with hands mapped to VR controllers
+    isFlyMode = false;
+    if (window.vrmController) {
+      window.vrmController.reposeAvatar();
+      if (window.vrmController.position) {
+        cameraRig.position.x = window.vrmController.position.x;
+        cameraRig.position.z = window.vrmController.position.z;
+      }
+      window.vrmController.setVRDetached(false);
+    } else if (getIsWalkMode()) {
       cameraRig.position.copy(player.pos);
     } else {
       cameraRig.position.copy(camera.position);
@@ -288,13 +375,24 @@ export function setupVR(renderer, scene, camera, player, getIsWalkMode, controls
     cameraRig.position.y = Math.max(gh, 0.2);
     camera.position.set(0, 0, 0);
     camera.rotation.set(0, 0, 0);
-    repositionVRUI();
+    if (vrCanvasUIEnabled) {
+      repositionVRUI(true);
+      if (fpsPanel) fpsPanel.visible = true;
+    } else {
+      vrUI.panelMesh.visible = false;
+      if (fpsPanel) fpsPanel.visible = false;
+    }
   });
 
   renderer.xr.addEventListener('sessionend', () => {
     controls.enabled = !getIsWalkMode();
     camera.position.copy(cameraRig.position).add(new THREE.Vector3(0, 1.72, 0));
     cameraRig.position.set(0, 0, 0);
+
+    // Reset and repose avatar upon exiting VR and reapply desktop animations
+    if (window.vrmController) {
+      window.vrmController.onVRExit();
+    }
   });
 
   // FPS tracker
@@ -313,7 +411,9 @@ export function setupVR(renderer, scene, camera, player, getIsWalkMode, controls
       fpsFrames = 0;
       fpsLastTime = now;
 
-      updateFpsCanvas(smoothedFps, smoothedMs);
+      if (vrCanvasUIEnabled) {
+        updateFpsCanvas(smoothedFps, smoothedMs);
+      }
       const hudFps = document.getElementById('hudFps');
       if (hudFps) {
         hudFps.textContent = `${smoothedFps} FPS (${smoothedMs.toFixed(1)}ms)`;
@@ -354,10 +454,14 @@ export function setupVR(renderer, scene, camera, player, getIsWalkMode, controls
           }
           xBtnPrev = !!xPressed;
 
-          // Y Button: Toggle VR UI Menu
+          // Y Button: Mount / Unmount In-VR Editor Controls Panel
           const yPressed = gp.buttons[5] && gp.buttons[5].pressed;
           if (yPressed && !yBtnPrev) {
-            repositionVRUI();
+            if (vrUI.panelMesh.visible) {
+              setVRCanvasUI(false);
+            } else {
+              repositionVRUI(true);
+            }
           }
           yBtnPrev = !!yPressed;
         }
@@ -366,12 +470,21 @@ export function setupVR(renderer, scene, camera, player, getIsWalkMode, controls
         if (src.handedness === 'right') {
           const bPressed = gp.buttons[5] && gp.buttons[5].pressed;
           if (bPressed && !bBtnPrev) {
-            repositionVRUI();
+            if (vrUI.panelMesh.visible) {
+              setVRCanvasUI(false);
+            } else {
+              repositionVRUI(true);
+            }
           }
           bBtnPrev = !!bPressed;
 
-          // Raycast laser to VR UI for hover tracking
-          vrUI.raycastUI(controller1);
+          // Raycast laser to VR UI for hover tracking & slider dragging
+          if (vrCanvasUIEnabled && vrUI.panelMesh.visible) {
+            const uiHit = vrUI.raycastUI(controller1);
+            if (uiHit) {
+              vrUI.handlePointerMove(uiHit.x, uiHit.y, isTriggerPressedOnUI);
+            }
+          }
         }
 
         // Joystick Locomotion
@@ -392,13 +505,9 @@ export function setupVR(renderer, scene, camera, player, getIsWalkMode, controls
             if (isFlyMode) {
               // 🕊️ FULL 3D FLIGHT LOCOMOTION
               // Moves in the exact 3D gaze vector (pitch + yaw) to soar across the sky!
-              const flyDir = new THREE.Vector3(0, 0, -1);
-              if (xrCam && xrCam.quaternion) {
-                flyDir.applyQuaternion(xrCam.quaternion);
-              } else {
-                camera.getWorldDirection(flyDir);
-              }
-              flyDir.applyQuaternion(cameraRig.quaternion).normalize();
+              const flyDir = new THREE.Vector3();
+              camera.getWorldDirection(flyDir);
+              flyDir.normalize();
 
               const flyRgt = new THREE.Vector3().crossVectors(flyDir, new THREE.Vector3(0, 1, 0)).normalize();
               const flySpd = 14.0 * dt; // Fast smooth soaring speed
@@ -409,14 +518,9 @@ export function setupVR(renderer, scene, camera, player, getIsWalkMode, controls
               // Altitude bounds in fly mode (0.3m to 90m)
               cameraRig.position.y = THREE.MathUtils.clamp(cameraRig.position.y, 0.3, 90.0);
             } else {
-              // 🚶 GROUND WALK LOCOMOTION
-              const headDir = new THREE.Vector3(0, 0, -1);
-              if (xrCam && xrCam.quaternion) {
-                headDir.applyQuaternion(xrCam.quaternion);
-              } else {
-                camera.getWorldDirection(headDir);
-              }
-              headDir.applyQuaternion(cameraRig.quaternion);
+              // 🚶 GROUND WALK LOCOMOTION w.r.t. VR Headset World Forward (fully accounts for snap turns)
+              const headDir = new THREE.Vector3();
+              camera.getWorldDirection(headDir);
               headDir.y = 0;
               if (headDir.lengthSq() > 0.0001) headDir.normalize();
               else headDir.set(0, 0, -1);
@@ -453,9 +557,10 @@ export function setupVR(renderer, scene, camera, player, getIsWalkMode, controls
         cameraRig.position.y = Math.max(gh, 0.1);
       }
 
-      // Continuous Squeeze Sculpting & Ring positioning
+      // Continuous Squeeze Sculpting & Ring positioning (Respects editorState.active)
+      const brushActive = !!window.terrainEditor?.editorState?.active;
       const hit = getControllerGroundHit(controller1);
-      if (hit) {
+      if (hit && brushActive) {
         vrBrushRing.position.set(hit.x, hit.y + 0.08, hit.z);
         const radius = window.terrainEditor?.editorState?.brushRadius || 10;
         vrBrushRing.scale.setScalar(radius);
@@ -484,6 +589,9 @@ export function setupVR(renderer, scene, camera, player, getIsWalkMode, controls
     recordFps,
     toggleFlyMode,
     isFlyMode: () => isFlyMode,
-    repositionVRUI
+    repositionVRUI,
+    setVRCanvasUI,
+    toggleVRCanvasUI,
+    isVRCanvasUIEnabled: () => vrCanvasUIEnabled
   };
 }

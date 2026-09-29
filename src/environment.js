@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { fragOutlineUniforms } from './outlineEffect.js';
 
 // Install Directional Atmospheric In-Scattering Fog into Three.js ShaderChunks
 THREE.ShaderChunk.fog_pars_vertex = `
@@ -48,7 +49,7 @@ THREE.ShaderChunk.fog_fragment = `
     #endif
 
     vec3 dirFogColor = fogColor;
-    if (dot(vAtmosphereViewDir, vAtmosphereViewDir) > 0.0001) {
+    if (dot(uAtmoHorizon, uAtmoHorizon) > 0.001 && dot(vAtmosphereViewDir, vAtmosphereViewDir) > 0.0001) {
       vec3 d = normalize(vAtmosphereViewDir);
       float h = clamp(d.y * 1.5 + 0.15, 0.0, 1.0);
       dirFogColor = mix(uAtmoHorizon, uAtmoZenith, pow(h, 0.52));
@@ -77,7 +78,7 @@ export const envConfig = {
   autoCycle: true,
   timeOfDay: 0.45, // 0.0 = midnight (00:00), 0.25 = sunrise (06:00), 0.50 = noon (12:00), 0.75 = sunset (18:00)
   sunIntensity: 2.35,
-  moonIntensity: 0.18, // Reduced bright moonlight from 0.65 to 0.18 for realistic moody night GI
+  moonIntensity: 0.85, // Vibrant celestial moonlight for clean directional shading and VRM cel-lighting at night
   fogBaseDensity: 0.0125 // Increased atmospheric fog (~3x denser than before)
 };
 
@@ -226,9 +227,9 @@ export function setupEnvironment(scene) {
   sky.name = 'sky_dome';
   scene.add(sky);
 
-  // Directional Light (Primary Sun/Moon Light)
+  // Directional Light 1 (Primary Sun Light)
   const dirLight = new THREE.DirectionalLight(0xffecd0, envConfig.sunIntensity);
-  dirLight.name = 'celestial_light';
+  dirLight.name = 'sun_light';
   dirLight.castShadow = true;
   dirLight.shadow.mapSize.set(2048, 2048);
   dirLight.shadow.camera.left = -80;  dirLight.shadow.camera.right = 80;
@@ -237,6 +238,18 @@ export function setupEnvironment(scene) {
   dirLight.shadow.bias = -0.0004;
   dirLight.shadow.normalBias = 0.5;
   scene.add(dirLight, dirLight.target);
+
+  // Directional Light 2 (Dedicated Night Moon Light - active 18:00 to 06:00)
+  const moonLight = new THREE.DirectionalLight(0xb4d8ff, 0.0);
+  moonLight.name = 'moon_light';
+  moonLight.castShadow = true;
+  moonLight.shadow.mapSize.set(2048, 2048);
+  moonLight.shadow.camera.left = -80;  moonLight.shadow.camera.right = 80;
+  moonLight.shadow.camera.top  =  80;  moonLight.shadow.camera.bottom = -80;
+  moonLight.shadow.camera.near = 30;   moonLight.shadow.camera.far = 300;
+  moonLight.shadow.bias = -0.0004;
+  moonLight.shadow.normalBias = 0.5;
+  scene.add(moonLight, moonLight.target);
 
   // Ambient & Hemisphere Lights
   const hemi = new THREE.HemisphereLight(0x92b9e6, 0x182412, 0.22);
@@ -260,7 +273,7 @@ export function setupEnvironment(scene) {
   const cSunSet = new THREE.Color(0xffbc66); // Golden honey sun (warm & golden, not red)
 
   // Cinematic moonlight blue
-  const cMoonLight = new THREE.Color(0x4a82cf); // Rich environmental blue tint
+  const cMoonLight = new THREE.Color(0xb4d8ff); // Crisp luminous celestial blue-silver
   const cFogDay    = new THREE.Color(0xd9cdb8);
   const cFogSun    = new THREE.Color(0xd2ad85); // Gentle golden hour mist (not brick red)
   const cFogNight  = new THREE.Color(0x08152e);
@@ -319,32 +332,43 @@ export function setupEnvironment(scene) {
     const envDensityMultiplier = 1.0 + 0.45 * morningMist + 0.35 * nightMist + 0.25 * sunsetHaze + atmosphericBreathe;
     fog.density = envConfig.fogBaseDensity * envDensityMultiplier;
 
-    // Directional Celestial Light (Transitions from Sun to Moon smoothly)
-    if (sunElevation > -0.05) {
-      // Day Sun
-      dirLight.position.copy(envUniforms.uSunDir.value).multiplyScalar(130);
-      dirLight.color.copy(cSunDay).lerp(cSunSet, sunsetFactor);
-      dirLight.intensity = Math.max(0.05, envConfig.sunIntensity * dayFactor);
+    // Primary Sun Light (Day)
+    dirLight.position.copy(envUniforms.uSunDir.value).multiplyScalar(130);
+    dirLight.target.position.set(0, 0, 0);
+    dirLight.color.copy(cSunDay).lerp(cSunSet, sunsetFactor);
+    dirLight.intensity = Math.max(0.0, envConfig.sunIntensity * dayFactor);
+
+    // Dedicated Moon Light (Night: active from 18:00 to 06:00, rotating along uMoonDir)
+    const currentHour = (envConfig.timeOfDay * 24.0) % 24.0;
+    moonLight.position.copy(envUniforms.uMoonDir.value).multiplyScalar(130);
+    moonLight.target.position.set(0, 0, 0);
+    moonLight.color.copy(cMoonLight);
+
+    let nightFactor = 0.0;
+    if (currentHour >= 17.5) {
+      nightFactor = THREE.MathUtils.clamp((currentHour - 17.5) / 0.5, 0.0, 1.0);
+    } else if (currentHour <= 6.5) {
+      nightFactor = THREE.MathUtils.clamp((6.5 - currentHour) / 0.5, 0.0, 1.0);
+    }
+    moonLight.intensity = envConfig.moonIntensity * nightFactor;
+
+    // Direct shadow mapping dynamically to active primary celestial light
+    if (nightFactor > 0.4) {
+      moonLight.castShadow = true;
+      dirLight.castShadow = false;
     } else {
-      // Night Moon: Soft moody moonlight with rich blue hue
-      dirLight.position.copy(envUniforms.uMoonDir.value).multiplyScalar(130);
-      dirLight.color.copy(cMoonLight);
-      const moonFactor = THREE.MathUtils.clamp((-sunElevation) / 0.5, 0.0, 1.0);
-      dirLight.intensity = envConfig.moonIntensity * moonFactor;
+      moonLight.castShadow = false;
+      dirLight.castShadow = (dayFactor > 0.05);
     }
 
-    // Hemisphere & Ambient Light Modulation (Reduced Night GI + Rich Environmental Blue Tint)
-    // Night sky hemilight: deep midnight blue (0x122a5c)
-    // Night ground hemilight: dark midnight navy/ground (0x030814)
-    hemi.color.copy(new THREE.Color(0x122a5c)).lerp(new THREE.Color(0x92b9e6), dayFactor);
-    hemi.groundColor.copy(new THREE.Color(0x030814)).lerp(new THREE.Color(0x182412), dayFactor);
-    // Reduced night GI intensity: 0.022 at night, up to 0.26 during the day
-    hemi.intensity = 0.022 + 0.238 * dayFactor;
+    // Hemisphere & Ambient Light Modulation (Balanced Night GI with Environmental Blue Tint)
+    hemi.color.copy(new THREE.Color(0x3a60a0)).lerp(new THREE.Color(0x92b9e6), dayFactor);
+    hemi.groundColor.copy(new THREE.Color(0x142010)).lerp(new THREE.Color(0x182412), dayFactor);
+    hemi.intensity = 0.20 + 0.18 * dayFactor;
 
-    // Ambient light: environmental blue tint (0x081836) at night
-    ambient.color.copy(new THREE.Color(0x081836)).lerp(new THREE.Color(0x0c140e), dayFactor);
-    // Reduced night ambient intensity: 0.010 at night, up to 0.07 during the day
-    ambient.intensity = 0.010 + 0.060 * dayFactor;
+    // Ambient light: environmental blue/green tint at night
+    ambient.color.copy(new THREE.Color(0x1a2e4c)).lerp(new THREE.Color(0x0c140e), dayFactor);
+    ambient.intensity = 0.16 + 0.08 * dayFactor;
 
     // Update HUD time of day slider if present
     const timeSlider = document.getElementById('timeOfDaySlider');
@@ -373,6 +397,7 @@ export function setupEnvironment(scene) {
 
   return {
     sun: dirLight,
+    moon: moonLight,
     hemi,
     ambient,
     sky,
@@ -383,7 +408,7 @@ export function setupEnvironment(scene) {
 }
 
 export function applyAtmosphericFog(material) {
-  if (!material) return;
+  if (!material || material.isShaderMaterial || material.isRawShaderMaterial) return;
   const prev = material.onBeforeCompile;
   material.onBeforeCompile = (shader, renderer) => {
     if (prev) prev(shader, renderer);
@@ -393,12 +418,32 @@ export function applyAtmosphericFog(material) {
     shader.uniforms.uAtmoHorizon  = envUniforms.uHorizon;
     shader.uniforms.uAtmoSunColor = envUniforms.uSunColor;
     shader.uniforms.uAtmoMoonColor = envUniforms.uMoonColor;
+    shader.uniforms.uFragOutlineActive = fragOutlineUniforms.uFragOutlineActive;
+
+    if (!shader.fragmentShader.includes('uFragOutlineActive')) {
+      shader.fragmentShader = 'uniform float uFragOutlineActive;\n' + shader.fragmentShader;
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <dithering_fragment>',
+        `
+        if (uFragOutlineActive > 0.01) {
+          float nDotV = abs(dot(normal, normalize(-vViewPosition)));
+          vec3 dNx = dFdx(normal);
+          vec3 dNy = dFdy(normal);
+          float normalEdge = sqrt(dot(dNx, dNx) + dot(dNy, dNy));
+          float edge = smoothstep(0.28, 0.08, nDotV) * 0.85 + smoothstep(0.35, 0.75, normalEdge) * 0.75;
+          gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(0.06, 0.08, 0.06), clamp(edge * uFragOutlineActive, 0.0, 0.95));
+        }
+        #include <dithering_fragment>
+        `
+      );
+    }
   };
   material.needsUpdate = true;
 }
 
 export function hookAtmosphericFogToScene(scene) {
   scene.traverse(obj => {
+    if (obj.userData?.isOutlineMesh) return;
     if (obj.isMesh && obj.material && obj.name !== 'sky_dome') {
       const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
       for (const m of mats) {

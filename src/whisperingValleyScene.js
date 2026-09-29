@@ -31,12 +31,14 @@ import { showNotification } from './levelSerializer.js';
 let _valleyRoot = null;
 const _gltfLoader = new GLTFLoader();
 const _optimizedCache = new Map();
+// Animated farmstead elements (weathervanes) updated each frame via updateFarmstead(t)
+const _vanes = [];
 
 // 14 GLB Assets with calibrated realistic fantasy scalings
 export const VALLEY_ASSETS = {
   barrel: { filename: 'barrel.glb', url: './AssetsTest/Assets/barrel.glb', scale: 0.55 },
   box: { filename: 'box.glb', url: './AssetsTest/Assets/box.glb', scale: 0.65 },
-  bridge: { filename: 'bridge.glb', url: './AssetsTest/Assets/bridge.glb', scale: 1.15 },
+  bridge: { filename: 'bridge.glb', url: './AssetsTest/Assets/bridge.glb', scale: 6.8 },
   fishing_stool: { filename: 'fishing stool.glb', url: './AssetsTest/Assets/fishing%20stool.glb', scale: 0.65 },
   lamp_post: { filename: 'lamp post.glb', url: './AssetsTest/Assets/lamp%20post.glb', scale: 0.75 },
   older_sprite: { filename: 'Older sprite.glb', url: './AssetsTest/Assets/Older%20sprite.glb', scale: 0.55 },
@@ -94,11 +96,26 @@ export async function buildWhisperingValley(scene, camera, controls) {
     controls.update();
   }
 
-  // 9. Stream high-fidelity GLBs in background to upgrade placeholders
-  _streamAndUpgradeGlbs(_valleyRoot);
-
-  showNotification('✨ Whispering Valley: Level 1 Loaded!', 'success', 3500);
+  // 9. Prototypes are loaded by default. Use upgradeValleyPrototypesToMesh to swap with actual GLB models.
+  showNotification('✨ Whispering Valley: Level 1 Loaded (Prototypes)!', 'success', 3500);
   return _valleyRoot;
+}
+
+/**
+ * Replaces all Whispering Valley prototype geometry with the actual high-fidelity 3D GLB models
+ */
+export async function upgradeValleyPrototypesToMesh(scene = null, camera = null, controls = null) {
+  if (!_valleyRoot || !_valleyRoot.parent) {
+    if (scene) {
+      await buildWhisperingValley(scene, camera, controls);
+    } else {
+      showNotification('Please load Whispering Valley: Level 1 first!', 'warn', 2500);
+      return;
+    }
+  }
+  showNotification('📦 Loading & Replacing Prototypes with Actual 3D Models...', 'info', 3000);
+  await _streamAndUpgradeGlbs(_valleyRoot);
+  showNotification('✨ All Whispering Valley prototypes replaced with real 3D models!', 'success', 3500);
 }
 
 /* ---------------------------------------------------------- 1. Real Terrain Sculpting */
@@ -299,69 +316,348 @@ function _plantValleyTrees() {
 /* ---------------------------------------------------------- 3. Farmstead Structures */
 
 function _buildFarmstead(parent) {
+  // Reset animation registry so stale vanes from a previous build are dropped
+  _vanes.length = 0;
   const g = new THREE.Group();
   g.name = 'farmstead_cluster';
 
-  const cottageY = groundHeight(-16, 5.5);
   const cottage = new THREE.Group();
-  cottage.position.set(-16, cottageY, 5.5);
+  cottage.name = 'farm_cottage';
+  cottage.position.set(-16, groundHeight(-16, 5.5), 5.5);
 
-  // Stone Foundation
-  const stoneBase = new THREE.Mesh(
-    new THREE.BoxGeometry(6.6, 0.65, 5.4),
-    new THREE.MeshStandardMaterial({ color: 0x5a554a, roughness: 0.9 })
-  );
-  stoneBase.position.y = 0.32;
-  stoneBase.castShadow = true;
-  stoneBase.receiveShadow = true;
+  // ---- Shared materials (created once, reused across all meshes) ----
+  const matStone    = new THREE.MeshStandardMaterial({ color: 0x8a8577, roughness: 0.95 });
+  const matPlaster  = new THREE.MeshStandardMaterial({ color: 0xf2e6c9, roughness: 0.9 });
+  const matBeam     = new THREE.MeshStandardMaterial({ color: 0x5b4128, roughness: 0.85 });
+  const matShingle  = new THREE.MeshStandardMaterial({ color: 0x7a4a3a, roughness: 0.9, side: THREE.DoubleSide });
+  const matTrim     = new THREE.MeshStandardMaterial({ color: 0xe8dcbf, roughness: 0.85 });
+  const matDoor     = new THREE.MeshStandardMaterial({ color: 0x4a2f1d, roughness: 0.7 });
+  const matGlass    = new THREE.MeshStandardMaterial({
+    color: 0xffc96b, emissive: 0xffaa33, emissiveIntensity: 1.6, roughness: 0.4, metalness: 0.0
+  });
+  const matLeaf     = new THREE.MeshStandardMaterial({ color: 0x5d8a3c, roughness: 0.9, side: THREE.DoubleSide });
+  const matPot      = new THREE.MeshStandardMaterial({ color: 0xb5623a, roughness: 0.9 });
+  const matFlowerA  = new THREE.MeshStandardMaterial({ color: 0xd94f7e, roughness: 0.8 });
+  const matFlowerB  = new THREE.MeshStandardMaterial({ color: 0xe8b84a, roughness: 0.8 });
+  const matIron     = new THREE.MeshStandardMaterial({ color: 0x2e2a26, roughness: 0.5, metalness: 0.7 });
+
+  // ---- Stone foundation with corner quoins ----
+  const stoneBase = new THREE.Mesh(new THREE.BoxGeometry(6.9, 0.7, 5.7), matStone);
+  stoneBase.position.y = 0.35;
   cottage.add(stoneBase);
+  // Corner quoins: stacked alternating blocks at each corner
+  const quoinGeo = new THREE.BoxGeometry(0.42, 0.28, 0.42);
+  for (const sx of [-1, 1]) {
+    for (const sz of [-1, 1]) {
+      for (let i = 0; i < 5; i++) {
+        const q = new THREE.Mesh(quoinGeo, matStone);
+        q.position.set(sx * 3.24, 0.78 + i * 0.29, sz * 2.64);
+        q.rotation.y = (i % 2 === 0) ? sx * 0.12 : -sx * 0.12;
+        cottage.add(q);
+      }
+    }
+  }
 
-  // Timber Walls
-  const walls = new THREE.Mesh(
-    new THREE.BoxGeometry(6.0, 2.8, 4.8),
-    new THREE.MeshStandardMaterial({ color: 0x8b6538, roughness: 0.8 })
-  );
-  walls.position.y = 2.0;
-  walls.castShadow = true;
-  cottage.add(walls);
+  // ---- Half-timbered walls: plaster infill core + non-overlapping timber frame ----
+  const wallH = 2.7, wallY0 = 0.7;
+  const wallW = 6.1, wallD = 4.9;
+  const postSize = 0.28; // Corner posts stand proud (0.28m square)
 
-  // Pitch Shingle Roof
-  const roof = new THREE.Mesh(
-    new THREE.ConeGeometry(4.8, 2.4, 4),
-    new THREE.MeshStandardMaterial({ color: 0x4a3b2a, roughness: 0.7 })
+  // Solid plaster infill core - recessed 7cm behind corner timbers to eliminate all Z-fighting
+  const plasterCore = new THREE.Mesh(
+    new THREE.BoxGeometry(wallW - 0.14, wallH - 0.02, wallD - 0.14),
+    matPlaster
   );
-  roof.rotation.y = Math.PI / 4;
-  roof.position.y = 4.2;
-  roof.castShadow = true;
-  cottage.add(roof);
+  plasterCore.position.set(0, wallY0 + wallH / 2, 0);
+  cottage.add(plasterCore);
 
-  // Front Porch Deck
-  const porch = new THREE.Mesh(
-    new THREE.BoxGeometry(3.4, 0.22, 2.6),
-    new THREE.MeshStandardMaterial({ color: 0x9e7b4e, roughness: 0.85 })
-  );
-  porch.position.set(0, 0.45, 3.4);
-  porch.receiveShadow = true;
+  // Corner timber posts: structural columns defining the house cube corners
+  // Outer corner is cleanly at sx * (wallW / 2) and sz * (wallD / 2) with zero coplanar overlap
+  const postGeo = new THREE.BoxGeometry(postSize, wallH, postSize);
+  for (const sx of [-1, 1]) {
+    for (const sz of [-1, 1]) {
+      const p = new THREE.Mesh(postGeo, matBeam);
+      p.position.set(
+        sx * (wallW / 2 - postSize / 2),
+        wallY0 + wallH / 2,
+        sz * (wallD / 2 - postSize / 2)
+      );
+      cottage.add(p);
+    }
+  }
+
+  // Mid timber posts
+  const midPostGeo = new THREE.BoxGeometry(0.24, wallH, 0.26);
+  // Back wall mid post:
+  const midBack = new THREE.Mesh(midPostGeo, matBeam);
+  midBack.position.set(0, wallY0 + wallH / 2, -wallD / 2 + 0.13);
+  cottage.add(midBack);
+  // Short lintel post above front door:
+  const midFrontTop = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.4, 0.26), matBeam);
+  midFrontTop.position.set(0, wallY0 + wallH - 0.2, wallD / 2 - 0.13);
+  cottage.add(midFrontTop);
+
+  // Horizontal rails:
+  // 1) Fit between corner posts (span between posts with 4cm mortise penetration), never reaching outer corners
+  // 2) Slightly thinner depth (0.20m vs postSize 0.28m) so posts stand 6cm proud on outer faces
+  const railH = 0.19;
+  const railThick = 0.20;
+
+  // Front & Back rails span along X between the corner posts:
+  const railFrontLength = wallW - 2 * postSize + 0.08;
+  const railFrontGeo = new THREE.BoxGeometry(railFrontLength, railH, railThick);
+  for (const ry of [wallY0 + 0.35, wallY0 + wallH - 0.12]) {
+    for (const sz of [-1, 1]) {
+      const rf = new THREE.Mesh(railFrontGeo, matBeam);
+      rf.position.set(0, ry, sz * (wallD / 2 - postSize / 2 - 0.02));
+      cottage.add(rf);
+    }
+  }
+
+  // Side rails span along Z between the corner posts:
+  const railSideLength = wallD - 2 * postSize + 0.08;
+  const railSideGeo = new THREE.BoxGeometry(railThick, railH, railSideLength);
+  for (const ry of [wallY0 + 0.35, wallY0 + wallH - 0.12]) {
+    for (const sx of [-1, 1]) {
+      const rs = new THREE.Mesh(railSideGeo, matBeam);
+      rs.position.set(sx * (wallW / 2 - postSize / 2 - 0.02), ry, 0);
+      cottage.add(rs);
+    }
+  }
+
+  // Diagonal braces in the front/back bays (classic half-timber X)
+  const braceGeo = new THREE.BoxGeometry(1.4, 0.14, 0.14);
+  for (const sx of [-1, 1]) {
+    for (const sz of [-1, 1]) {
+      const bZ = sz * (wallD / 2 - 0.11);
+      const b1 = new THREE.Mesh(braceGeo, matBeam);
+      b1.position.set(sx * 1.55, wallY0 + 1.0, bZ);
+      b1.rotation.z = sx * sz * 0.62;
+      cottage.add(b1);
+      const b2 = new THREE.Mesh(braceGeo, matBeam);
+      b2.position.set(sx * 1.55, wallY0 + 1.0, bZ);
+      b2.rotation.z = -sx * sz * 0.62;
+      cottage.add(b2);
+    }
+  }
+
+  // ---- Multi-gable shingled roof with eave overhangs ----
+  const roofY = wallY0 + wallH; // 3.4
+  const mainRoof = new THREE.Mesh(new THREE.ConeGeometry(4.9, 2.5, 4), matShingle);
+  mainRoof.rotation.y = Math.PI / 4;
+  mainRoof.position.set(0, roofY + 1.25, 0);
+  cottage.add(mainRoof);
+  // Eave overhang boards (4 sloped skirts just below the roof edge)
+  const eaveGeo = new THREE.BoxGeometry(6.9, 0.12, 1.3);
+  for (const sz of [-1, 1]) {
+    const e = new THREE.Mesh(eaveGeo, matShingle);
+    e.position.set(0, roofY + 0.18, sz * 2.55);
+    e.rotation.x = sz * 0.62;
+    cottage.add(e);
+  }
+  const eaveSideGeo = new THREE.BoxGeometry(1.3, 0.12, 5.7);
+  for (const sx of [-1, 1]) {
+    const e = new THREE.Mesh(eaveSideGeo, matShingle);
+    e.position.set(sx * 2.55, roofY + 0.18, 0);
+    e.rotation.z = -sx * 0.62;
+    cottage.add(e);
+  }
+  // Front gable (triangular wall under the front roof slope)
+  const gableShape = new THREE.Shape();
+  gableShape.moveTo(-3.05, 0);
+  gableShape.lineTo(3.05, 0);
+  gableShape.lineTo(0, 2.3);
+  gableShape.closePath();
+  const gableGeo = new THREE.ExtrudeGeometry(gableShape, { depth: 0.16, bevelEnabled: false });
+  const gableFront = new THREE.Mesh(gableGeo, matPlaster);
+  gableFront.position.set(0, roofY, -0.08 + (wallD / 2));
+  gableFront.rotation.y = 0;
+  cottage.add(gableFront);
+  const gableBack = new THREE.Mesh(gableGeo, matPlaster);
+  gableBack.position.set(0, roofY, -(wallD / 2) - 0.16 + 0.08);
+  gableBack.rotation.y = Math.PI;
+  cottage.add(gableBack);
+  // Gable timber trim: bargeboards + king post
+  const bargeGeo = new THREE.BoxGeometry(6.4, 0.16, 0.2);
+  for (const sz of [-1, 1]) {
+    const bl = new THREE.Mesh(bargeGeo, matBeam);
+    bl.position.set(-1.55, roofY + 1.12, sz * (wallD / 2 + 0.06));
+    bl.rotation.z = 0.62;
+    cottage.add(bl);
+    const br = new THREE.Mesh(bargeGeo, matBeam);
+    br.position.set(1.55, roofY + 1.12, sz * (wallD / 2 + 0.06));
+    br.rotation.z = -0.62;
+    cottage.add(br);
+  }
+  const kingPost = new THREE.Mesh(new THREE.BoxGeometry(0.2, 2.2, 0.2), matBeam);
+  kingPost.position.set(0, roofY + 1.05, wallD / 2 - 0.1);
+  cottage.add(kingPost);
+  // Small dormer gable on the front slope (attic window)
+  const dormer = new THREE.Group();
+  dormer.position.set(0, roofY + 1.05, wallD / 2 + 0.75);
+  const dBox = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.9, 0.6), matPlaster);
+  dBox.position.y = 0.45;
+  dormer.add(dBox);
+  const dRoof = new THREE.Mesh(new THREE.ConeGeometry(0.85, 0.7, 4), matShingle);
+  dRoof.rotation.y = Math.PI / 4;
+  dRoof.position.y = 1.25;
+  dormer.add(dRoof);
+  const dWin = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.06), matGlass);
+  dWin.position.set(0, 0.5, 0.31);
+  dormer.add(dWin);
+  cottage.add(dormer);
+
+  // ---- Tall stone chimney with cap and pot ----
+  const chimney = new THREE.Mesh(new THREE.BoxGeometry(0.85, 3.4, 0.85), matStone);
+  chimney.position.set(1.9, roofY + 1.7, -0.9);
+  cottage.add(chimney);
+  const chimCap = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.22, 1.1), matStone);
+  chimCap.position.set(1.9, roofY + 3.5, -0.9);
+  cottage.add(chimCap);
+  const chimPot = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 0.5, 8), matPot);
+  chimPot.position.set(1.9, roofY + 3.78, -0.9);
+  cottage.add(chimPot);
+
+  // ---- Front porch: deck, columns, canopy, steps ----
+  const porch = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.25, 2.4), matBeam);
+  porch.position.set(0, 0.55, wallD / 2 + 1.0);
   cottage.add(porch);
-
-  // Porch Canopy
-  const canopy = new THREE.Mesh(
-    new THREE.BoxGeometry(3.6, 0.16, 2.4),
-    new THREE.MeshStandardMaterial({ color: 0x3d3023, roughness: 0.7 })
-  );
-  canopy.position.set(0, 2.6, 3.2);
-  canopy.rotation.x = 0.15;
-  canopy.castShadow = true;
+  const stepGeo = new THREE.BoxGeometry(1.8, 0.16, 0.45);
+  const s1 = new THREE.Mesh(stepGeo, matStone);
+  s1.position.set(0, 0.28, wallD / 2 + 2.15);
+  cottage.add(s1);
+  const s2 = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.16, 0.4), matStone);
+  s2.position.set(0, 0.14, wallD / 2 + 2.5);
+  cottage.add(s2);
+  const colGeo = new THREE.CylinderGeometry(0.11, 0.13, 2.0, 8);
+  for (const sx of [-1, 1]) {
+    const c = new THREE.Mesh(colGeo, matBeam);
+    c.position.set(sx * 1.5, 1.6, wallD / 2 + 1.9);
+    cottage.add(c);
+  }
+  const canopy = new THREE.Mesh(new THREE.BoxGeometry(3.8, 0.14, 2.7), matShingle);
+  canopy.position.set(0, 2.65, wallD / 2 + 1.0);
+  canopy.rotation.x = -0.12;
   cottage.add(canopy);
 
-  // Chimney
-  const chimney = new THREE.Mesh(
-    new THREE.BoxGeometry(0.7, 2.0, 0.7),
-    new THREE.MeshStandardMaterial({ color: 0x44403c, roughness: 0.95 })
-  );
-  chimney.position.set(1.8, 4.4, -0.8);
-  chimney.castShadow = true;
-  cottage.add(chimney);
+  // ---- Door with arched top, frame, and step ----
+  const doorFrame = new THREE.Mesh(new THREE.BoxGeometry(1.5, 2.4, 0.18), matTrim);
+  doorFrame.position.set(0, wallY0 + 1.2, wallD / 2 + 0.02);
+  cottage.add(doorFrame);
+  const door = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2.15, 0.1), matDoor);
+  door.position.set(0, wallY0 + 1.08, wallD / 2 + 0.09);
+  cottage.add(door);
+  const doorArch = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 0.1, 12, 1, false, 0, Math.PI), matDoor);
+  doorArch.position.set(0, wallY0 + 2.15, wallD / 2 + 0.09);
+  cottage.add(doorArch);
+  const knob = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), matIron);
+  knob.position.set(0.42, wallY0 + 1.15, wallD / 2 + 0.16);
+  cottage.add(knob);
+
+  // ---- Glowing windows: front pair, side pair, dormer (already added) ----
+  const winGeo = new THREE.BoxGeometry(0.9, 1.1, 0.08);
+  const winFrameGeo = new THREE.BoxGeometry(1.15, 1.35, 0.06);
+  function addWindow(x, y, z, ry) {
+    const g = new THREE.Group();
+    g.position.set(x, y, z);
+    g.rotation.y = ry;
+    const fr = new THREE.Mesh(winFrameGeo, matTrim);
+    fr.position.z = -0.01;
+    g.add(fr);
+    const w = new THREE.Mesh(winGeo, matGlass);
+    w.position.z = 0.03;
+    g.add(w);
+    // Cross muntins
+    const mh = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.06, 0.05), matBeam);
+    mh.position.z = 0.07;
+    g.add(mh);
+    const mv = new THREE.Mesh(new THREE.BoxGeometry(0.06, 1.1, 0.05), matBeam);
+    mv.position.z = 0.07;
+    g.add(mv);
+    cottage.add(g);
+  }
+  addWindow(-2.0, wallY0 + 1.35, wallD / 2 - 0.02, 0);
+  addWindow(2.0, wallY0 + 1.35, wallD / 2 - 0.02, 0);
+  addWindow(-wallW / 2 + 0.02, wallY0 + 1.35, 0, Math.PI / 2);
+  addWindow(wallW / 2 - 0.02, wallY0 + 1.35, 0, -Math.PI / 2);
+  // Small round attic window in front gable
+  const attWin = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.08, 16), matGlass);
+  attWin.rotation.x = Math.PI / 2;
+  attWin.position.set(0, roofY + 1.15, wallD / 2 + 0.1);
+  cottage.add(attWin);
+
+  // ---- Flower boxes under front windows ----
+  const boxGeo = new THREE.BoxGeometry(1.3, 0.28, 0.3);
+  for (const sx of [-1, 1]) {
+    const fb = new THREE.Mesh(boxGeo, matBeam);
+    fb.position.set(sx * 2.0, wallY0 + 0.75, wallD / 2 + 0.18);
+    cottage.add(fb);
+    // Flowers: small colored spheres in a row
+    for (let i = -2; i <= 2; i++) {
+      const f = new THREE.Mesh(new THREE.SphereGeometry(0.09, 6, 5), i % 2 === 0 ? matFlowerA : matFlowerB);
+      f.position.set(sx * 2.0 + i * 0.24, wallY0 + 0.93, wallD / 2 + 0.2);
+      cottage.add(f);
+    }
+    // Leafy tufts
+    for (let i = -1; i <= 1; i++) {
+      const lf = new THREE.Mesh(new THREE.SphereGeometry(0.11, 6, 5), matLeaf);
+      lf.position.set(sx * 2.0 + i * 0.3, wallY0 + 0.87, wallD / 2 + 0.16);
+      cottage.add(lf);
+    }
+  }
+
+  // ---- Hanging lanterns by the door and porch columns ----
+  function addLantern(x, y, z) {
+    const g = new THREE.Group();
+    g.position.set(x, y, z);
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.06, 0.06), matIron);
+    arm.position.x = 0.17;
+    g.add(arm);
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.15, 0.3, 8), matGlass);
+    body.position.set(0.4, -0.25, 0);
+    g.add(body);
+    const cap = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.14, 8), matIron);
+    cap.position.set(0.4, -0.06, 0);
+    g.add(cap);
+    cottage.add(g);
+  }
+  addLantern(-0.95, wallY0 + 2.3, wallD / 2 + 0.15);
+  addLantern(0.95, wallY0 + 2.3, wallD / 2 + 0.15);
+
+  // ---- Ivy vine accents on left corner posts ----
+  const ivyGeo = new THREE.SphereGeometry(0.16, 6, 5);
+  for (let i = 0; i < 9; i++) {
+    const iv = new THREE.Mesh(ivyGeo, matLeaf);
+    iv.position.set(-wallW / 2 - 0.05 + (i % 3) * 0.1, wallY0 + 0.4 + i * 0.26, wallD / 2 - 0.2 - (i % 2) * 0.15);
+    iv.scale.set(1, 0.8, 1);
+    cottage.add(iv);
+  }
+
+  // ---- Weathervane on the ridge ----
+  const vane = new THREE.Group();
+  vane.position.set(0, roofY + 2.55, 0);
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.8, 6), matIron);
+  pole.position.y = 0.4;
+  vane.add(pole);
+  const arrowShape = new THREE.Shape();
+  arrowShape.moveTo(-0.5, 0);
+  arrowShape.lineTo(0.35, 0);
+  arrowShape.lineTo(0.18, -0.12);
+  arrowShape.lineTo(0.42, 0);
+  arrowShape.lineTo(0.18, 0.12);
+  arrowShape.lineTo(-0.5, 0);
+  const arrowGeo = new THREE.ExtrudeGeometry(arrowShape, { depth: 0.03, bevelEnabled: false });
+  const arrow = new THREE.Mesh(arrowGeo, matIron);
+  arrow.position.y = 0.82;
+  vane.add(arrow);
+  const ball = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), matIron);
+  ball.position.y = 0.95;
+  vane.add(ball);
+  cottage.add(vane);
+  _vanes.push(vane); // animated in updateFarmstead(t)
+
+  // ---- Atmospheric fog + terrain contact ground blending (same as GLB props) ----
+  setupModelMaterials(cottage, { blendDistance: 0.4, blendStrength: 0.85, normalBlend: 0.6 });
 
   g.add(cottage);
   registerObstacle('farm_cottage', -16, 5.5, 4.8);
@@ -415,6 +711,15 @@ function _buildFarmstead(parent) {
   g.add(scarecrow);
 
   parent.add(g);
+}
+/**
+ * Per-frame animation for farmstead dynamic elements (weathervane sway).
+ * Called from the main render loop each frame with elapsed time.
+ */
+export function updateFarmstead(t) {
+  for (const v of _vanes) {
+    v.rotation.y = Math.sin(t * 0.55) * 1.1;
+  }
 }
 
 function _buildFenceWithBunting(group, x1, z1, x2, z2) {

@@ -8,42 +8,75 @@
   html, body { margin: 0; height: 100%; overflow: hidden; background: #0c1208; }
   #app { position: fixed; inset: 0; }
 
-  /* Minimal Bottom HUD */
-  .hud {
-    position: fixed; left: 16px; bottom: 14px; z-index: 2;
-    font: 12px/1.5 ui-monospace, Consolas, monospace;
-    color: rgba(235, 240, 225, .85); text-shadow: 0 1px 3px rgba(0,0,0,.7);
-    pointer-events: none; user-select: none;
+  /* Floating Gear Toggle Button */
+  .gear-btn {
+    position: fixed;
+    top: 14px;
+    right: 16px;
+    z-index: 998;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: rgba(10, 16, 12, 0.92);
+    border: 1px solid rgba(126, 240, 136, 0.45);
+    color: #7ef088;
+    font-size: 21px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    user-select: none;
   }
-  .hud b { color: #eaf2df; font-size: 13px; letter-spacing: .06em; }
+  .gear-btn:hover {
+    background: rgba(20, 32, 24, 0.98);
+    border-color: #7ef088;
+    transform: rotate(45deg) scale(1.1);
+    box-shadow: 0 6px 24px rgba(126, 240, 136, 0.45);
+  }
 
-  /* Right Side Controls Panel */
+  /* Consolidated Right Side Controls Panel */
   .side-panel {
-    position: fixed; top: 12px; right: 16px; z-index: 20;
-    width: 254px;
+    position: fixed; top: 12px; right: 14px; z-index: 999;
+    width: 320px;
     max-height: calc(100vh - 24px);
-    overflow-y: auto;
-    overflow-x: hidden;
-    background: rgba(10, 16, 12, 0.88);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.22);
+    overflow: hidden;
+    background: rgba(10, 16, 12, 0.94);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(126, 240, 136, 0.3);
     border-radius: 14px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
-    padding: 10px 14px;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.06);
+    padding: 8px 10px;
     font: 11.5px/1.4 ui-monospace, Consolas, monospace;
     color: #eaf2df;
     user-select: none;
     box-sizing: border-box;
-    transition: all 0.2s ease-in-out;
+    transform: translateX(0);
+    opacity: 1;
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease;
   }
-  .side-panel::-webkit-scrollbar { width: 4px; }
-  .side-panel::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 2px; }
-  .side-panel.collapsed #sidePanelBody {
-    display: none;
+  .side-panel.collapsed {
+    transform: translateX(360px);
+    opacity: 0;
+    pointer-events: none;
   }
   .side-panel.hidden {
     display: none;
+  }
+  #unifiedEditorCanvas {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 520 / 880;
+    display: block;
+    border-radius: 8px;
+    cursor: default;
+    user-select: none;
+    touch-action: none;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
   }
   .panel-header {
     display: flex;
@@ -173,345 +206,475 @@
     color: #fff;
     box-shadow: 0 0 8px rgba(126, 240, 136, 0.4);
   }
+  .accordion-group {
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 9px;
+    margin-bottom: 7px;
+    overflow: hidden;
+    background: rgba(14, 22, 16, 0.55);
+    transition: all 0.2s ease;
+  }
+  .accordion-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 9px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 11px;
+    color: #eaf2df;
+    background: rgba(255, 255, 255, 0.05);
+    user-select: none;
+    transition: background 0.15s, color 0.15s;
+  }
+  .accordion-header:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: #7ef088;
+  }
+  .accordion-header.active {
+    background: rgba(126, 240, 136, 0.12);
+    color: #7ef088;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .accordion-arrow {
+    font-size: 9px;
+    color: rgba(235, 245, 225, 0.6);
+  }
+  .accordion-content {
+    padding: 7px 9px;
+  }
 </style>
 </head>
 <body>
 <div id="app"></div>
 
-<!-- Top Stats Bar: Total Triangles & Object Breakdown -->
-<div id="topStatsBar" style="position:fixed; top:12px; left:16px; z-index:10; font:11.5px/1.4 ui-monospace, Consolas, monospace; color:#eaf2df; background:rgba(10, 16, 12, 0.88); padding:5px 12px; border-radius:12px; border:1px solid rgba(255,255,255,0.25); backdrop-filter:blur(8px); box-shadow:0 4px 16px rgba(0,0,0,0.5); user-select:none; display:flex; align-items:center; gap:12px;">
-  <div style="display:flex; align-items:center; gap:6px;">
-    <span style="color:#7ef088; font-weight:bold; font-size:12.5px;">▲ <span id="statTotalTri">...</span></span>
-    <span style="color:rgba(235,245,225,0.65); font-size:10.5px;">TOTAL TRIS</span>
-  </div>
-  <div style="height:14px; width:1px; background:rgba(255,255,255,0.2);"></div>
-  <div id="triBreakdownChips" style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
-    <!-- Populated dynamically by src/stats.js -->
-  </div>
-</div>
+<!-- Floating Gear Toggle Button (Visible when Editor Controls are collapsed) -->
+<button id="gearToggleBtn" class="gear-btn" title="Toggle Editor Controls (E / Tab)">⚙️</button>
 
-<!-- Right Side Controls Panel (Sliders & Terrain Editor on side) -->
+<!-- Consolidated Editor Controls Panel -->
 <div id="sideControlsPanel" class="side-panel">
   <div class="panel-header">
-    <div style="display:flex; align-items:center; gap:6px;">
-      <span style="font-size:13px;">🛠️</span>
-      <b style="color:#eaf2df; letter-spacing:0.04em;">LEVEL EDITOR</b>
+    <div style="display:flex; align-items:center; gap:7px;">
+      <span style="font-size:15px; color:#7ef088;">⚙️</span>
+      <b style="color:#eaf2df; letter-spacing:0.04em; font-size:12px;">EDITOR CONTROLS</b>
     </div>
-    <button id="collapseSidePanelBtn" title="Collapse Panel" class="icon-btn">—</button>
+    <div style="display:flex; align-items:center; gap:8px;">
+      <span id="hudFps" style="color:#7ef088; font-weight:bold; font-size:11px; background:rgba(0,0,0,0.5); padding:2px 7px; border-radius:10px; border:1px solid rgba(126,240,136,0.3);">-- FPS</span>
+      <button id="collapseSidePanelBtn" title="Collapse into Gear Icon (Tab / E)" class="icon-btn" style="font-size:15px; color:#eaf2df; padding:1px 6px;">✕</button>
+    </div>
   </div>
 
   <div id="sidePanelBody" class="panel-body">
-    <!-- Level Editor Brushes -->
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-      <span style="font-weight:bold; color:#7ef088; font-size:11px;">🎨 TERRAIN BRUSHES</span>
-      <span style="font-size:9.5px; color:rgba(235,245,225,0.65);">L-Click: Draw</span>
-    </div>
-    
-    <div class="brush-grid">
-      <button class="brush-btn active" data-brush="grass" title="Green Grass (Spawns GPU grass blades)">
-        <span>🌿</span>Grass
-      </button>
-      <button class="brush-btn" data-brush="no_grass" title="Green Ground / Lawn / Crop (Zero grass blades)">
-        <span>🌱</span>No Grass
-      </button>
-      <button class="brush-btn" data-brush="sand" title="Golden Sand / Beach (Clears grass)">
-        <span>🏖️</span>Sand
-      </button>
-      <button class="brush-btn" data-brush="road" title="Earthen Trail / Road (Clears grass)">
-        <span>🛤️</span>Road
-      </button>
-      <button class="brush-btn" data-brush="water" title="Water Basin & River Border">
-        <span>🌊</span>Water
-      </button>
-      <button class="brush-btn" data-brush="raise" title="Sculpt / Raise Mountain Elevation">
-        <span>⛰️</span>Raise
-      </button>
-      <button class="brush-btn" data-brush="lower" title="Dig / Lower Valley Elevation">
-        <span>🔻</span>Lower
-      </button>
-      <button class="brush-btn" data-brush="smooth" title="Smooth Heights & Transitions">
-        <span>〰️</span>Smooth
-      </button>
-      <button class="brush-btn" data-brush="rock" title="Rugged Cliff Rock">
-        <span>🪨</span>Rock
-      </button>
-      <button class="brush-btn" data-brush="treeConifer" title="Place a conifer at cursor (custom colors)">
-        <span>🌲</span>Conifer
-      </button>
-      <button class="brush-btn" data-brush="treeBroad" title="Place a broadleaf tree at cursor">
-        <span>🍃</span>Broadleaf
-      </button>
-      <button class="brush-btn" data-brush="glb" title="Place selected GLB asset at cursor">
-        <span>📦</span>GLB
-      </button>
-    </div>
+    <canvas id="unifiedEditorCanvas" width="520" height="880"></canvas>
+  </div>
+</div>
 
-    <!-- Brush Radius & Strength -->
-    <div class="ctrl-group" style="margin-top:6px;">
-      <div class="ctrl-row">
-        <span class="ctrl-label">⭕ Brush Radius</span>
-        <span id="brushRadiusVal" class="ctrl-val" style="color:#7ef088;">10m</span>
-      </div>
-      <input id="brushRadiusSlider" type="range" min="2" max="35" step="1" value="10" class="ctrl-slider" style="accent-color:#7ef088;">
-    </div>
-    <div class="ctrl-group">
-      <div class="ctrl-row">
-        <span class="ctrl-label">💧 Brush Strength</span>
-        <span id="brushStrengthVal" class="ctrl-val" style="color:#7ef088;">45%</span>
-      </div>
-      <input id="brushStrengthSlider" type="range" min="0.1" max="1.0" step="0.05" value="0.45" class="ctrl-slider" style="accent-color:#7ef088;">
-    </div>
+<!-- Hidden fallback container retaining legacy element IDs for background systems -->
+<div id="hiddenLegacyControls" style="display:none !important;" aria-hidden="true">
 
-    <!-- PCG Procedural Generation Tools -->
-    <div style="display:flex; flex-direction:column; gap:4px; margin-top:6px; margin-bottom:8px;">
-      <button id="pcgNewWorldBtn" class="action-btn" style="padding:5px 6px; font-size:11px; font-weight:bold; background:linear-gradient(135deg, rgba(60, 160, 220, 0.5), rgba(90, 210, 140, 0.5)); border-color:#7ef088;" title="Generate random PCG terrain with multi-octave noises">
-        🎲 Randomize PCG (Noises)
-      </button>
-      <div style="display:flex; gap:4px;">
-        <button id="pcgAutoTreesBtn" class="action-btn" style="flex:1; padding:3px 4px; font-size:10px; background:rgba(76, 160, 62, 0.45);" title="Auto-place trees on painted green grass (no water/rock/road)">
-          🌲 Auto-Trees
-        </button>
-        <button id="pcgResetBtn" class="action-btn" style="flex:1; padding:3px 4px; font-size:10px; background:rgba(200, 70, 50, 0.4);" title="Reset terrain back to default procedural state">
-          ↺ Reset
-        </button>
+    <!-- GROUP 0: Scene Stats & Triangle Breakdown -->
+    <div id="topStatsBar" class="accordion-group">
+      <div class="accordion-header active">
+        <span>📊 Scene Stats & Triangles</span>
+        <span class="accordion-arrow">▼</span>
       </div>
-    </div>
-
-    <!-- Tree Customization & Palette Colors -->
-    <div class="ctrl-group" style="margin-top:6px;">
-      <div class="ctrl-row">
-        <span class="ctrl-label">🌲 TREE CUSTOMIZER</span>
-      </div>
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; margin-top:2px;">
-        <label style="font-size:9.5px; color:rgba(235,245,225,0.7);">Trunk Base
-          <input id="treeColorBarkBottom" type="color" value="#362112" style="width:20px; height:18px; border:none; border-radius:4px; cursor:pointer; padding:0; background:none;">
-        </label>
-        <label style="font-size:9.5px; color:rgba(235,245,225,0.7);">Trunk Top
-          <input id="treeColorBarkTop" type="color" value="#785437" style="width:20px; height:18px; border:none; border-radius:4px; cursor:pointer; padding:0; background:none;">
-        </label>
-        <label style="font-size:9.5px; color:rgba(235,245,225,0.7);">Pine Leaf Base
-          <input id="treeColorLeafBottom" type="color" value="#1a421c" style="width:20px; height:18px; border:none; border-radius:4px; cursor:pointer; padding:0; background:none;">
-        </label>
-        <label style="font-size:9.5px; color:rgba(235,245,225,0.7);">Pine Leaf Top
-          <input id="treeColorLeafTop" type="color" value="#5ea83c" style="width:20px; height:18px; border:none; border-radius:4px; cursor:pointer; padding:0; background:none;">
-        </label>
-        <label style="font-size:9.5px; color:rgba(235,245,225,0.7);">Oak Leaf Base
-          <input id="treeColorBroadBottom" type="color" value="#24521c" style="width:20px; height:18px; border:none; border-radius:4px; cursor:pointer; padding:0; background:none;">
-        </label>
-        <label style="font-size:9.5px; color:rgba(235,245,225,0.7);">Oak Leaf Crown
-          <input id="treeColorBroadTop" type="color" value="#7cc643" style="width:20px; height:18px; border:none; border-radius:4px; cursor:pointer; padding:0; background:none;">
-        </label>
-      </div>
-      <div style="display:flex; gap:3px; margin-top:5px;" id="treeColorPresets">
-        <button class="mini-btn tree-preset" data-preset="summer" title="Lush Summer">🌲 Summer</button>
-        <button class="mini-btn tree-preset" data-preset="autumn" title="Golden Autumn">🍂 Autumn</button>
-        <button class="mini-btn tree-preset" data-preset="sakura" title="Cherry Blossom">🌸 Sakura</button>
-        <button class="mini-btn tree-preset" data-preset="mystic" title="Mystic Fantasy">🔮 Mystic</button>
-        <button class="mini-btn tree-preset" data-preset="frost" title="Alpine Frost">❄️ Frost</button>
-      </div>
-    </div>
-
-    <!-- Custom Tree Samplers -->
-    <div class="ctrl-group" style="margin-top:6px;">
-      <div class="ctrl-row">
-        <span class="ctrl-label">🌸 CUSTOM TREE SAMPLERS</span>
-      </div>
-      <div style="display:flex; flex-direction:column; gap:4px; margin-top:3px;">
-        <div style="display:flex; gap:4px;">
-          <button id="sampleConiferOnlyBtn" class="action-btn" style="flex:1; padding:3px 4px; font-size:10px; background:rgba(40,110,60,0.5);" title="Sample conifers/pines exclusively across high ridges">
-            🌲 Pines Only
-          </button>
-          <button id="sampleBroadOnlyBtn" class="action-btn" style="flex:1; padding:3px 4px; font-size:10px; background:rgba(80,140,50,0.5);" title="Sample broadleaf trees exclusively in lush valleys">
-            🌳 Oaks Only
-          </button>
+      <div class="accordion-content">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:5px; background:rgba(0,0,0,0.4); padding:4px 8px; border-radius:8px; border:1px solid rgba(255,255,255,0.12);">
+          <span style="color:#7ef088; font-weight:bold; font-size:12px;">▲ <span id="statTotalTri">...</span></span>
+          <span style="color:rgba(235,245,225,0.65); font-size:10px; font-weight:bold;">TOTAL TRIS</span>
         </div>
-        <div style="display:flex; gap:4px;">
-          <button id="eraseTreesBrushBtn" class="action-btn" style="flex:1; padding:3px 4px; font-size:10px; background:rgba(180,60,60,0.45);" title="Click terrain to erase trees within brush radius">
-            🧹 Erase Trees
+        <div id="triBreakdownChips" style="display:flex; flex-wrap:wrap; gap:4px;">
+          <!-- Populated dynamically by src/stats.js -->
+        </div>
+      </div>
+    </div>
+
+    <!-- GROUP 1: Maps & Level Selection -->
+    <div class="accordion-group">
+      <div class="accordion-header active">
+        <span>🗺️ Maps & Levels</span>
+        <span class="accordion-arrow">▼</span>
+      </div>
+      <div class="accordion-content">
+        <div style="display:flex; flex-direction:column; gap:4px;">
+          <button id="whisperingValleyBtn" class="action-btn" style="background:linear-gradient(135deg, rgba(234, 179, 8, 0.4), rgba(74, 222, 128, 0.4)); border-color:#facc15; font-weight:bold;" title="Load Whispering Valley: Level 1 map with prototypes">
+            🏔️ Whispering Valley: Level 1
           </button>
-          <button id="sampleGroveBrushBtn" class="action-btn" style="flex:1; padding:3px 4px; font-size:10px; background:rgba(160,70,160,0.45);" title="Click terrain to plant a grove cluster of 6 trees">
-            🌸 Plant Grove
+          <button id="upgradeValleyModelsBtn" class="action-btn" style="background:linear-gradient(135deg, rgba(168, 85, 247, 0.4), rgba(59, 130, 246, 0.4)); border-color:#c084fc; font-weight:bold;" title="Replace Valley Prototypes with Actual 3D Models">
+            🏛️ Load Actual Models (Meshes)
           </button>
         </div>
       </div>
     </div>
 
-    <!-- GLB Assets & Fantasy Props -->
-    <div class="ctrl-group" style="margin-top:6px;">
-      <div class="ctrl-row">
-        <span class="ctrl-label">📦 GLB & FANTASY PROPS</span>
+    <!-- GROUP 2: VRM Character, Camera & Controls -->
+    <div class="accordion-group">
+      <div class="accordion-header active">
+        <span>👤 Character & Camera</span>
+        <span class="accordion-arrow">▼</span>
       </div>
-      <button id="sideOpenAssetBrowserBtn" class="action-btn" style="padding:6px 8px; font-size:11px; font-weight:bold; background:linear-gradient(135deg, rgba(56, 189, 248, 0.45), rgba(126, 240, 136, 0.45)); border-color:#7ef088; margin-bottom:6px;" title="Browse all 14 3D models in AssetsTest/Assets, preview in 3D, and configure Meshopt & Texture compression">
-        🔍 3D Models & Optimizer (14 Assets)
-      </button>
-      <div style="font-size:9.5px; color:rgba(235,245,225,0.7); margin-bottom:2px;">Built-in Props & Custom Models:</div>
-      <div id="glbAssetList" style="display:flex; flex-wrap:wrap; gap:3px; margin-top:2px;"></div>
-      <label style="display:block; margin-top:5px; font-size:9.5px; color:rgba(235,245,225,0.7);">
-        📂 Load Custom .GLB File:
-        <input id="glbFileInput" type="file" accept=".glb,.gltf" multiple style="font-size:10px; width:100%; margin-top:2px;">
-      </label>
-      <div class="ctrl-row" style="margin-top:4px;">
-        <span class="ctrl-label">Scale</span>
-        <span id="glbScaleVal" class="ctrl-val">1.0×</span>
-      </div>
-      <input id="glbScaleSlider" type="range" min="0.2" max="6" step="0.1" value="1" class="ctrl-slider" style="accent-color:#f59e0b;">
-      <div class="ctrl-row">
-        <span class="ctrl-label">Yaw (R / Wheel)</span>
-        <span id="glbYawVal" class="ctrl-val">0°</span>
-      </div>
-      <input id="glbYawSlider" type="range" min="-180" max="180" step="5" value="0" class="ctrl-slider" style="accent-color:#f59e0b;">
-    </div>
+      <div class="accordion-content">
+        <div style="display:flex; flex-direction:column; gap:4px;">
+          <input type="file" id="vrmFileInput" accept=".vrm,.glb" style="display:none;">
+          <button id="vrmAvatarBtn" class="action-btn" style="background:linear-gradient(135deg, rgba(236, 72, 153, 0.4), rgba(168, 85, 247, 0.4)); border-color:#f472b6; font-weight:bold;" title="Toggle VRM Character Controller & First/Third Person Mode">
+            👤 VRM Avatar (C)
+          </button>
+          
+          <!-- Avatar Model Picker Grid -->
+          <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:3px;">
+            <button id="avatarAliciaBtn" class="mini-btn active" style="padding:4px 2px;" title="Alicia Solid (Classic Mascot)">Alicia</button>
+            <button id="avatarSampleBBtn" class="mini-btn" style="padding:4px 2px;" title="Avatar Sample B (VRoid Girl)">Avatar B</button>
+            <button id="avatarSeedSanBtn" class="mini-btn" style="padding:4px 2px;" title="Seed-san (VRM 1.0 Suit)">Seed-san</button>
+          </div>
 
-    <!-- Save / Load Level (Storage & File) -->
-    <div class="ctrl-group" style="margin-top:6px;">
-      <div class="ctrl-row">
-        <span class="ctrl-label">💾 LEVEL PERSISTENCE</span>
-      </div>
-      <div style="display:flex; gap:4px; margin-top:2px;">
-        <button id="quickSaveStorageBtn" class="action-btn" style="flex:1; padding:4px 4px; font-size:10px; background:rgba(30,140,80,0.55);" title="Save whole world level to browser storage (Ctrl+S)">
-          💾 Quick Save
-        </button>
-        <button id="quickLoadStorageBtn" class="action-btn" style="flex:1; padding:4px 4px; font-size:10px; background:rgba(60,130,220,0.5);" title="Restore level from browser storage">
-          📂 Quick Load
-        </button>
-      </div>
-      <div style="display:flex; gap:4px; margin-top:4px;">
-        <button id="saveLevelBtn" class="action-btn" style="flex:1; padding:3px 4px; font-size:9.5px; background:rgba(255,255,255,0.15);" title="Download level as JSON file">
-          ⬇️ Export JSON
-        </button>
-        <button id="loadLevelBtn" class="action-btn" style="flex:1; padding:3px 4px; font-size:9.5px; background:rgba(255,255,255,0.15);" title="Upload a saved level JSON file">
-          ⬆️ Import JSON
-        </button>
-      </div>
-      <input id="levelFileInput" type="file" accept=".json,application/json" style="display:none;">
-    </div>
-
-    <div style="height:1px; background:rgba(255,255,255,0.12); margin:8px 0;"></div>
-
-    <!-- Environment & Grass Settings -->
-    <!-- Time of Day -->
-    <div class="ctrl-group">
-      <div class="ctrl-row">
-        <span class="ctrl-label">☀️ Time of Day</span>
-        <div style="display:flex; align-items:center; gap:5px;">
-          <span id="timeOfDayVal" class="ctrl-val" style="color:#ffd57e;">☀️ 10:48</span>
-          <button id="timeCycleBtn" title="Toggle Auto Day/Night Cycle" class="mini-btn">⏯️</button>
+          <!-- Custom VRM Upload & Compression -->
+          <button id="customVrmBtn" class="action-btn" style="background:linear-gradient(135deg, rgba(34, 197, 94, 0.35), rgba(56, 189, 248, 0.35)); border-color:#4ade80; font-weight:bold;" title="Choose any .VRM or .GLB file from disk, or drag & drop into window">
+            📂 Load Custom .VRM Model
+          </button>
+          <button id="switchAvatarBtn" class="action-btn" style="background:linear-gradient(135deg, rgba(168, 85, 247, 0.4), rgba(236, 72, 153, 0.4)); border-color:#c084fc; font-weight:bold;" title="Cycle between available avatars">
+            🔄 Cycle Avatar
+          </button>
+          <button id="modeBtn" class="action-btn" style="background:rgba(76, 160, 62, 0.55); border-color:#7ef088;">
+            🔭 Inspect Mode (V)
+          </button>
+          <div id="vrmCompressionStatsBadge" style="display:none; font-size:9.5px; color:#7ef088; background:rgba(126,240,136,0.12); padding:4px 8px; border-radius:4px; border:1px solid rgba(126,240,136,0.3); text-align:center;">
+            ⚡ Optimized VRM Active
+          </div>
+          <div id="hudHelp" style="font-size:9.5px; color:rgba(235, 240, 225, 0.7); line-height:1.45; background:rgba(0,0,0,0.35); padding:6px 8px; border-radius:6px; margin-top:3px; border:1px solid rgba(255,255,255,0.08);">
+            <b>V:</b> Inspect / Character &nbsp;·&nbsp; <b>WASD:</b> Move &nbsp;·&nbsp; <b>Drag:</b> Orbit &nbsp;·&nbsp; <b>Scroll:</b> Zoom &nbsp;·&nbsp; <b>Drop:</b> Load .vrm file
+          </div>
         </div>
       </div>
-      <input id="timeOfDaySlider" type="range" min="0" max="100" step="1" value="45" class="ctrl-slider" style="accent-color:#ffd57e;" title="Scrub Time of Day">
     </div>
-
-    <!-- Atmospheric Fog -->
-    <div class="ctrl-group">
-      <div class="ctrl-row">
-        <span class="ctrl-label">🌫️ Atmospheric Fog</span>
-        <span id="fogDensityVal" class="ctrl-val" style="color:#92c0e6;">1.2%</span>
+    <!-- GROUP 1: Terrain & Sculpting Editor -->
+    <div class="accordion-group">
+      <div class="accordion-header active">
+        <span>🎨 Terrain & Sculpting</span>
+        <span class="accordion-arrow">▼</span>
       </div>
-      <input id="fogDensitySlider" type="range" min="2" max="35" step="1" value="12" class="ctrl-slider" style="accent-color:#92c0e6;" title="Base Fog Density">
-    </div>
+      <div class="accordion-content">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+          <span style="font-weight:bold; color:#7ef088; font-size:10.5px;">BRUSHES</span>
+          <div style="display:flex; gap:4px;">
+            <button class="mini-btn toggle-brush-btn" title="Toggle terrain brush painting on/off">🖌️ Brush: ON</button>
+            <button id="editModeToggleBtn" class="mini-btn toggle-edit-btn" title="Edit Mode: click any model to move / rotate / scale it">✋ Edit: OFF</button>
+          </div>
+        </div>
+        
+        <div class="brush-grid">
+          <button class="brush-btn active" data-brush="grass" title="Green Grass (Spawns GPU grass blades)"><span>🌿</span>Grass</button>
+          <button class="brush-btn" data-brush="no_grass" title="Green Ground / Lawn / Crop (Zero grass blades)"><span>🌱</span>No Grass</button>
+          <button class="brush-btn" data-brush="sand" title="Golden Sand / Beach (Clears grass)"><span>🏖️</span>Sand</button>
+          <button class="brush-btn" data-brush="road" title="Earthen Trail / Road (Clears grass)"><span>🛤️</span>Road</button>
+          <button class="brush-btn" data-brush="water" title="Water Basin & River Border"><span>🌊</span>Water</button>
+          <button class="brush-btn" data-brush="raise" title="Sculpt / Raise Mountain Elevation"><span>⛰️</span>Raise</button>
+          <button class="brush-btn" data-brush="lower" title="Dig / Lower Valley Elevation"><span>🔻</span>Lower</button>
+          <button class="brush-btn" data-brush="smooth" title="Smooth Heights & Transitions"><span>〰️</span>Smooth</button>
+          <button class="brush-btn" data-brush="rock" title="Rugged Cliff Rock"><span>🪨</span>Rock</button>
+          <button class="brush-btn" data-brush="treeConifer" title="Place a conifer at cursor"><span>🌲</span>Conifer</button>
+          <button class="brush-btn" data-brush="treeBroad" title="Place a broadleaf tree at cursor"><span>🍃</span>Broadleaf</button>
+          <button class="brush-btn" data-brush="glb" title="Place selected GLB asset at cursor"><span>📦</span>GLB</button>
+        </div>
 
-    <!-- Grass Height Scale -->
-    <div class="ctrl-group">
-      <div class="ctrl-row">
-        <span class="ctrl-label">📏 Grass Height</span>
-        <span id="grassHeightVal" class="ctrl-val" style="color:#7ef088;">1.0x</span>
-      </div>
-      <input id="grassHeightSlider" type="range" min="0.3" max="2.5" step="0.1" value="1.0" class="ctrl-slider" style="accent-color:#7ef088;" title="Grass Height Scale Factor">
-    </div>
+        <div class="ctrl-group" style="margin-top:6px;">
+          <div class="ctrl-row">
+            <span class="ctrl-label">⭕ Radius</span>
+            <span id="brushRadiusVal" class="ctrl-val" style="color:#7ef088;">10m</span>
+          </div>
+          <input id="brushRadiusSlider" type="range" min="2" max="35" step="1" value="10" class="ctrl-slider" style="accent-color:#7ef088;">
+        </div>
+        <div class="ctrl-group">
+          <div class="ctrl-row">
+            <span class="ctrl-label">💧 Strength</span>
+            <span id="brushStrengthVal" class="ctrl-val" style="color:#7ef088;">45%</span>
+          </div>
+          <input id="brushStrengthSlider" type="range" min="0.1" max="1.0" step="0.05" value="0.45" class="ctrl-slider" style="accent-color:#7ef088;">
+        </div>
 
-    <!-- Grass Density -->
-    <div class="ctrl-group">
-      <div class="ctrl-row">
-        <span class="ctrl-label">🌾 Blade Density</span>
-        <span id="grassDensityVal" class="ctrl-val" style="color:#a8f09e;">16/m²</span>
-      </div>
-      <input id="grassDensitySlider" type="range" min="2" max="50" step="1" value="16" class="ctrl-slider" style="accent-color:#4ca03e;" title="Blade Density">
-    </div>
-
-    <!-- Grass Radius -->
-    <div class="ctrl-group">
-      <div class="ctrl-row">
-        <span class="ctrl-label">⭕ Render Radius</span>
-        <span id="grassRadiusVal" class="ctrl-val" style="color:#7ef088;">35m</span>
-      </div>
-      <input id="grassRadiusSlider" type="range" min="15" max="65" step="5" value="35" class="ctrl-slider" style="accent-color:#7ef088;" title="Grass Render Radius">
-    </div>
-
-    <!-- Ground Blend -->
-    <div class="ctrl-group">
-      <div class="ctrl-row">
-        <span class="ctrl-label">⛰️ Ground Blend</span>
-        <span id="groundBlendVal" class="ctrl-val" style="color:#a8f09e;">65%</span>
-      </div>
-      <input id="groundBlendSlider" type="range" min="0" max="1" step="0.05" value="0.65" class="ctrl-slider" style="accent-color:#4ca03e;" title="Ground Blend Factor">
-    </div>
-
-    <!-- Dynamic Water Shoreline Fade & Foam -->
-    <div class="ctrl-group">
-      <div class="ctrl-row">
-        <span class="ctrl-label">🌊 Shoreline Fade</span>
-        <span id="waterFadeVal" class="ctrl-val" style="color:#38bdf8;">0.55m</span>
-      </div>
-      <input id="waterFadeSlider" type="range" min="0.1" max="2.0" step="0.05" value="0.55" class="ctrl-slider" style="accent-color:#38bdf8;" title="Dynamic Water Shoreline Fade Distance">
-    </div>
-    <div class="ctrl-group">
-      <div class="ctrl-row">
-        <span class="ctrl-label">🫧 Shoreline Foam</span>
-        <span id="waterFoamVal" class="ctrl-val" style="color:#7ef088;">0.32m</span>
-      </div>
-      <input id="waterFoamSlider" type="range" min="0.05" max="1.5" step="0.05" value="0.32" class="ctrl-slider" style="accent-color:#7ef088;" title="Dynamic Shoreline Foam Width">
-    </div>
-
-    <!-- Blade Color & Swatches -->
-    <div class="ctrl-group">
-      <div class="ctrl-row">
-        <span class="ctrl-label">🎨 Blade Tint</span>
-        <div style="display:flex; align-items:center; gap:5px;">
-          <input type="color" id="grassColorPicker" value="#4ca03e" style="width:20px; height:18px; border:none; border-radius:4px; cursor:pointer; padding:0; background:none;">
-          <div style="display:flex; gap:3px;">
-            <button class="colorPreset" data-color="#4ca03e" title="Lush Green" style="width:13px; height:13px; border-radius:50%; background:#4ca03e; border:1px solid #fff; cursor:pointer; padding:0;"></button>
-            <button class="colorPreset" data-color="#c5af45" title="Golden Meadow" style="width:13px; height:13px; border-radius:50%; background:#c5af45; border:1px solid #fff; cursor:pointer; padding:0;"></button>
-            <button class="colorPreset" data-color="#256220" title="Deep Pine" style="width:13px; height:13px; border-radius:50%; background:#256220; border:1px solid #fff; cursor:pointer; padding:0;"></button>
-            <button class="colorPreset" data-color="#af572e" title="Autumn Glow" style="width:13px; height:13px; border-radius:50%; background:#af572e; border:1px solid #fff; cursor:pointer; padding:0;"></button>
-            <button class="colorPreset" data-color="#1ea476" title="Emerald Fantasy" style="width:13px; height:13px; border-radius:50%; background:#1ea476; border:1px solid #fff; cursor:pointer; padding:0;"></button>
+        <div style="display:flex; flex-direction:column; gap:4px; margin-top:6px;">
+          <button id="pcgNewWorldBtn" class="action-btn" style="padding:4px 6px; font-size:10.5px; font-weight:bold; background:linear-gradient(135deg, rgba(60, 160, 220, 0.5), rgba(90, 210, 140, 0.5)); border-color:#7ef088;" title="Generate random PCG terrain with multi-octave noises">
+            🎲 Randomize PCG (Noises)
+          </button>
+          <div style="display:flex; gap:4px;">
+            <button id="pcgAutoTreesBtn" class="action-btn" style="flex:1; padding:3px 4px; font-size:9.5px; background:rgba(76, 160, 62, 0.45);" title="Auto-place trees on painted green grass">🌲 Auto-Trees</button>
+            <button id="pcgResetBtn" class="action-btn" style="flex:1; padding:3px 4px; font-size:9.5px; background:rgba(200, 70, 50, 0.4);" title="Reset terrain back to default procedural state">↺ Reset</button>
           </div>
         </div>
       </div>
     </div>
 
-    <div style="height:1px; background:rgba(255,255,255,0.12); margin:8px 0;"></div>
+    <!-- GROUP: Edit Mode Transform Panel -->
+    <div id="editTransformGroup" class="accordion-group" style="display:none; border-color:rgba(56, 189, 248, 0.4); background:rgba(14, 28, 38, 0.75);">
+      <div class="accordion-header active" style="background:rgba(56, 189, 248, 0.18);">
+        <span style="color:#38bdf8; font-weight:bold;">📐 Model Transform (Edit Mode)</span>
+        <span id="panelPropName" style="color:#7ef088; font-size:11px; margin-left:auto; margin-right:8px; font-weight:bold;">No Selection</span>
+      </div>
+      <div class="accordion-content" style="padding:8px;">
+        <!-- Translation (X, Y, Z) -->
+        <div style="margin-bottom:6px;">
+          <div style="font-size:10px; color:#7ef088; margin-bottom:2px; font-weight:bold;">✥ Translation (Position)</div>
+          <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:4px;">
+            <div style="display:flex; align-items:center; gap:2px; background:rgba(255,255,255,0.08); padding:3px 5px; border-radius:5px; border:1px solid rgba(255,255,255,0.14);">
+              <span style="font-size:10px; color:#e06c75; font-weight:bold;">X</span>
+              <input id="panelPosX" type="number" step="0.2" style="width:100%; background:none; border:none; color:#fff; font:11px monospace; outline:none;" placeholder="0">
+            </div>
+            <div style="display:flex; align-items:center; gap:2px; background:rgba(255,255,255,0.08); padding:3px 5px; border-radius:5px; border:1px solid rgba(255,255,255,0.14);">
+              <span style="font-size:10px; color:#98c379; font-weight:bold;">Y</span>
+              <input id="panelPosY" type="number" step="0.2" style="width:100%; background:none; border:none; color:#fff; font:11px monospace; outline:none;" placeholder="0">
+            </div>
+            <div style="display:flex; align-items:center; gap:2px; background:rgba(255,255,255,0.08); padding:3px 5px; border-radius:5px; border:1px solid rgba(255,255,255,0.14);">
+              <span style="font-size:10px; color:#61afef; font-weight:bold;">Z</span>
+              <input id="panelPosZ" type="number" step="0.2" style="width:100%; background:none; border:none; color:#fff; font:11px monospace; outline:none;" placeholder="0">
+            </div>
+          </div>
+        </div>
 
-    <!-- Quick Action Buttons -->
-    <div style="display:flex; flex-direction:column; gap:6px;">
-      <button id="modeBtn" class="action-btn">🚶 Walk Mode (V)</button>
-      <button id="flyModeBtn" class="action-btn" style="background:rgba(56, 189, 248, 0.45); border-color:#38bdf8;">🕊️ Fly Mode (F)</button>
-      <button id="fxBtn" class="action-btn" style="background:rgba(230, 140, 30, 0.45);">⚡ Quest Mode: FX OFF (P)</button>
-      <a href="/cutout_grass.glb" download="cutout_grass.glb" class="action-btn" style="text-decoration:none; background:rgba(76, 160, 62, 0.4);">
-        📥 Download GLB (40 tris)
-      </a>
+        <!-- Rotation & Scaling -->
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:8px;">
+          <div>
+            <div style="font-size:10px; color:#ffd57e; font-weight:bold; margin-bottom:2px;">🔄 Rotation (Yaw)</div>
+            <div style="display:flex; align-items:center; gap:2px; background:rgba(255,255,255,0.08); padding:3px 5px; border-radius:5px; border:1px solid rgba(255,255,255,0.14);">
+              <input id="panelRotY" type="number" step="5" style="width:100%; background:none; border:none; color:#fff; font:11px monospace; outline:none;" placeholder="0">
+              <span style="font-size:10px; color:#ffd57e;">°</span>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:10px; color:#38bdf8; font-weight:bold; margin-bottom:2px;">⤢ Scaling</div>
+            <div style="display:flex; align-items:center; gap:2px; background:rgba(255,255,255,0.08); padding:3px 5px; border-radius:5px; border:1px solid rgba(255,255,255,0.14);">
+              <input id="panelScale" type="number" step="0.05" min="0.05" style="width:100%; background:none; border:none; color:#fff; font:11px monospace; outline:none;" placeholder="1.0">
+              <span style="font-size:10px; color:#38bdf8;">×</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Gizmo & Actions Buttons -->
+        <div style="display:flex; gap:3px; margin-bottom:4px;">
+          <button id="panelBtnMove" class="mini-btn active" style="flex:1;">✥ Move</button>
+          <button id="panelBtnRotate" class="mini-btn" style="flex:1;">🔄 Rotate</button>
+          <button id="panelBtnScale" class="mini-btn" style="flex:1;">⤢ Scale</button>
+        </div>
+        <div style="display:flex; gap:3px;">
+          <button id="panelBtnSnap" class="mini-btn" style="flex:1;" title="Snap model to terrain elevation">⛰️ Snap</button>
+          <button id="panelBtnClone" class="mini-btn" style="flex:1;" title="Duplicate selected model">📋 Clone</button>
+          <button id="panelBtnDelete" class="mini-btn" style="flex:1; color:#ff8b8b;" title="Delete selected model">🗑️ Del</button>
+        </div>
+      </div>
     </div>
-  </div>
-</div>
 
-<!-- Minimal Unobstructed Bottom HUD -->
-<div class="hud">
-  <div style="display:flex; align-items:center; gap:8px; margin-bottom:3px;">
-    <b>DENSE FOREST & LEVEL EDITOR</b>
-    <span id="hudFps" style="color:#7ef088; font-weight:bold; background:rgba(0,0,0,0.45); padding:1px 6px; border-radius:8px;">-- FPS</span>
-    <button id="whisperingValleyBtn" style="pointer-events:auto; cursor:pointer; background:linear-gradient(135deg, rgba(234, 179, 8, 0.45), rgba(74, 222, 128, 0.45)); border:1px solid #facc15; color:#fff; padding:2px 10px; border-radius:12px; font:11px monospace; backdrop-filter:blur(4px); font-weight:bold;" title="Load Whispering Valley: Level 1 map with all 14 props">
-      🏔️ Whispering Valley: Level 1
-    </button>
-    <button id="openAssetBrowserBtn" style="pointer-events:auto; cursor:pointer; background:linear-gradient(135deg, rgba(56, 189, 248, 0.35), rgba(126, 240, 136, 0.35)); border:1px solid #7ef088; color:#fff; padding:2px 10px; border-radius:12px; font:11px monospace; backdrop-filter:blur(4px); font-weight:bold;" title="Open 3D Models Library, 3D Preview Inspector & Optimizer">
-      📦 3D Models & Optimizer
-    </button>
-    <button id="vrmAvatarBtn" style="pointer-events:auto; cursor:pointer; background:linear-gradient(135deg, rgba(236, 72, 153, 0.45), rgba(168, 85, 247, 0.45)); border:1px solid #f472b6; color:#fff; padding:2px 10px; border-radius:12px; font:11px monospace; backdrop-filter:blur(4px); font-weight:bold;" title="Toggle VRM Character Controller & First/Third Person Mode">
-      👤 VRM Avatar (C)
-    </button>
-    <button id="toggleSideBtn" style="pointer-events:auto; cursor:pointer; background:rgba(255,255,255,0.18); border:1px solid rgba(255,255,255,0.35); color:#eaf2df; padding:2px 8px; border-radius:12px; font:11px monospace; backdrop-filter:blur(4px);">
-      🛠️ Editor Controls
-    </button>
-  </div>
-  <span id="hudHelp">WASD / Stick — Move &nbsp;·&nbsp; Mouse / Head — Look &nbsp;·&nbsp; C — 1st/3rd Person &nbsp;·&nbsp; Shift — Sprint &nbsp;·&nbsp; V — Orbit &nbsp;·&nbsp; F — Fly &nbsp;·&nbsp; 🥽 VR Ready</span>
+    <!-- GROUP 2: 3D Model Loader & Props -->
+    <div class="accordion-group">
+      <div class="accordion-header active">
+        <span>📦 3D Model Loader & Props</span>
+        <span class="accordion-arrow">▼</span>
+      </div>
+      <div class="accordion-content">
+        <button id="sideOpenAssetBrowserBtn" class="action-btn" style="padding:5px 8px; font-size:10.5px; font-weight:bold; background:linear-gradient(135deg, rgba(56, 189, 248, 0.45), rgba(126, 240, 136, 0.45)); border-color:#7ef088; margin-bottom:6px;" title="Browse all 14 3D models in AssetsTest/Assets, preview in 3D, and configure Meshopt & Texture compression">
+          🔍 3D Models & Optimizer (14 Assets)
+        </button>
+        <button id="openAssetBrowserBtn" style="display:none;"></button>
+        <button id="toggleSideBtn" style="display:none;"></button>
+        <div style="font-size:9.5px; color:rgba(235,245,225,0.7); margin-bottom:2px;">Built-in Props:</div>
+        <div id="glbAssetList" style="display:flex; flex-wrap:wrap; gap:3px; margin-top:2px;"></div>
+        <label style="display:block; margin-top:5px; font-size:9.5px; color:rgba(235,245,225,0.7);">
+          📂 Load Custom .GLB File:
+          <input id="glbFileInput" type="file" accept=".glb,.gltf" multiple style="font-size:10px; width:100%; margin-top:2px;">
+        </label>
+        <div class="ctrl-row" style="margin-top:5px;">
+          <span class="ctrl-label">Scale</span>
+          <span id="glbScaleVal" class="ctrl-val">1.0×</span>
+        </div>
+        <input id="glbScaleSlider" type="range" min="0.2" max="6" step="0.1" value="1" class="ctrl-slider" style="accent-color:#f59e0b;">
+        <div class="ctrl-row" style="margin-top:4px;">
+          <span class="ctrl-label">Yaw (R / Wheel)</span>
+          <span id="glbYawVal" class="ctrl-val">0°</span>
+        </div>
+        <input id="glbYawSlider" type="range" min="-180" max="180" step="5" value="0" class="ctrl-slider" style="accent-color:#f59e0b;">
+      </div>
+    </div>
+
+    <!-- GROUP 3: Foliage & Trees -->
+    <div class="accordion-group">
+      <div class="accordion-header">
+        <span>🌲 Tree & Foliage Customizer</span>
+        <span class="accordion-arrow">▶</span>
+      </div>
+      <div class="accordion-content" style="display:none;">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:4px; margin-top:2px;">
+          <label style="font-size:9.5px; color:rgba(235,245,225,0.7);">Trunk Base
+            <input id="treeColorBarkBottom" type="color" value="#362112" style="width:20px; height:18px; border:none; border-radius:4px; cursor:pointer; padding:0; background:none;">
+          </label>
+          <label style="font-size:9.5px; color:rgba(235,245,225,0.7);">Trunk Top
+            <input id="treeColorBarkTop" type="color" value="#785437" style="width:20px; height:18px; border:none; border-radius:4px; cursor:pointer; padding:0; background:none;">
+          </label>
+          <label style="font-size:9.5px; color:rgba(235,245,225,0.7);">Pine Leaf Base
+            <input id="treeColorLeafBottom" type="color" value="#1a421c" style="width:20px; height:18px; border:none; border-radius:4px; cursor:pointer; padding:0; background:none;">
+          </label>
+          <label style="font-size:9.5px; color:rgba(235,245,225,0.7);">Pine Leaf Top
+            <input id="treeColorLeafTop" type="color" value="#5ea83c" style="width:20px; height:18px; border:none; border-radius:4px; cursor:pointer; padding:0; background:none;">
+          </label>
+          <label style="font-size:9.5px; color:rgba(235,245,225,0.7);">Oak Leaf Base
+            <input id="treeColorBroadBottom" type="color" value="#24521c" style="width:20px; height:18px; border:none; border-radius:4px; cursor:pointer; padding:0; background:none;">
+          </label>
+          <label style="font-size:9.5px; color:rgba(235,245,225,0.7);">Oak Leaf Crown
+            <input id="treeColorBroadTop" type="color" value="#7cc643" style="width:20px; height:18px; border:none; border-radius:4px; cursor:pointer; padding:0; background:none;">
+          </label>
+        </div>
+        <div style="display:flex; gap:3px; margin-top:5px;" id="treeColorPresets">
+          <button class="mini-btn tree-preset" data-preset="summer" title="Lush Summer">🌲 Summer</button>
+          <button class="mini-btn tree-preset" data-preset="autumn" title="Golden Autumn">🍂 Autumn</button>
+          <button class="mini-btn tree-preset" data-preset="sakura" title="Cherry Blossom">🌸 Sakura</button>
+          <button class="mini-btn tree-preset" data-preset="mystic" title="Mystic Fantasy">🔮 Mystic</button>
+          <button class="mini-btn tree-preset" data-preset="frost" title="Alpine Frost">❄️ Frost</button>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:4px; margin-top:6px;">
+          <div style="display:flex; gap:4px;">
+            <button id="sampleConiferOnlyBtn" class="action-btn" style="flex:1; padding:3px 4px; font-size:9.5px; background:rgba(40,110,60,0.5);">🌲 Pines Only</button>
+            <button id="sampleBroadOnlyBtn" class="action-btn" style="flex:1; padding:3px 4px; font-size:9.5px; background:rgba(80,140,50,0.5);">🌳 Oaks Only</button>
+          </div>
+          <div style="display:flex; gap:4px;">
+            <button id="eraseTreesBrushBtn" class="action-btn" style="flex:1; padding:3px 4px; font-size:9.5px; background:rgba(180,60,60,0.45);">🧹 Erase Trees</button>
+            <button id="sampleGroveBrushBtn" class="action-btn" style="flex:1; padding:3px 4px; font-size:9.5px; background:rgba(160,70,160,0.45);">🌸 Plant Grove</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- GROUP 4: Environment & Atmosphere -->
+    <div class="accordion-group">
+      <div class="accordion-header active">
+        <span>☀️ Environment & Atmosphere</span>
+        <span class="accordion-arrow">▼</span>
+      </div>
+      <div class="accordion-content">
+        <div class="ctrl-group">
+          <div class="ctrl-row">
+            <span class="ctrl-label">☀️ Time of Day</span>
+            <div style="display:flex; align-items:center; gap:5px;">
+              <span id="timeOfDayVal" class="ctrl-val" style="color:#ffd57e;">☀️ 10:48</span>
+              <button id="timeCycleBtn" title="Toggle Auto Day/Night Cycle" class="mini-btn">⏯️</button>
+            </div>
+          </div>
+          <input id="timeOfDaySlider" type="range" min="0" max="100" step="1" value="45" class="ctrl-slider" style="accent-color:#ffd57e;">
+        </div>
+        <div class="ctrl-group">
+          <div class="ctrl-row">
+            <span class="ctrl-label">🌫️ Atmospheric Fog</span>
+            <span id="fogDensityVal" class="ctrl-val" style="color:#92c0e6;">1.2%</span>
+          </div>
+          <input id="fogDensitySlider" type="range" min="2" max="35" step="1" value="12" class="ctrl-slider" style="accent-color:#92c0e6;">
+        </div>
+        <div class="ctrl-group">
+          <div class="ctrl-row">
+            <span class="ctrl-label">🌊 Shoreline Fade</span>
+            <span id="waterFadeVal" class="ctrl-val" style="color:#38bdf8;">0.55m</span>
+          </div>
+          <input id="waterFadeSlider" type="range" min="0.1" max="2.0" step="0.05" value="0.55" class="ctrl-slider" style="accent-color:#38bdf8;">
+        </div>
+        <div class="ctrl-group">
+          <div class="ctrl-row">
+            <span class="ctrl-label">🫧 Shoreline Foam</span>
+            <span id="waterFoamVal" class="ctrl-val" style="color:#7ef088;">0.32m</span>
+          </div>
+          <input id="waterFoamSlider" type="range" min="0.05" max="1.5" step="0.05" value="0.32" class="ctrl-slider" style="accent-color:#7ef088;">
+        </div>
+      </div>
+    </div>
+
+    <!-- GROUP 5: Grass & Ground Blend -->
+    <div class="accordion-group">
+      <div class="accordion-header">
+        <span>🌾 Grass & Ground Blend</span>
+        <span class="accordion-arrow">▶</span>
+      </div>
+      <div class="accordion-content" style="display:none;">
+        <div class="ctrl-group">
+          <div class="ctrl-row">
+            <span class="ctrl-label">📏 Grass Height</span>
+            <span id="grassHeightVal" class="ctrl-val" style="color:#7ef088;">1.0x</span>
+          </div>
+          <input id="grassHeightSlider" type="range" min="0.3" max="2.5" step="0.1" value="1.0" class="ctrl-slider" style="accent-color:#7ef088;">
+        </div>
+        <div class="ctrl-group">
+          <div class="ctrl-row">
+            <span class="ctrl-label">🌾 Blade Density</span>
+            <span id="grassDensityVal" class="ctrl-val" style="color:#a8f09e;">16/m²</span>
+          </div>
+          <input id="grassDensitySlider" type="range" min="2" max="50" step="1" value="16" class="ctrl-slider" style="accent-color:#4ca03e;">
+        </div>
+        <div class="ctrl-group">
+          <div class="ctrl-row">
+            <span class="ctrl-label">⭕ Render Radius</span>
+            <span id="grassRadiusVal" class="ctrl-val" style="color:#7ef088;">35m</span>
+          </div>
+          <input id="grassRadiusSlider" type="range" min="15" max="65" step="5" value="35" class="ctrl-slider" style="accent-color:#7ef088;">
+        </div>
+        <div class="ctrl-group">
+          <div class="ctrl-row">
+            <span class="ctrl-label">⛰️ Ground Blend</span>
+            <span id="groundBlendVal" class="ctrl-val" style="color:#a8f09e;">65%</span>
+          </div>
+          <input id="groundBlendSlider" type="range" min="0" max="1" step="0.05" value="0.65" class="ctrl-slider" style="accent-color:#4ca03e;">
+        </div>
+        <div class="ctrl-group">
+          <div class="ctrl-row">
+            <span class="ctrl-label">🎨 Blade Tint</span>
+            <div style="display:flex; align-items:center; gap:5px;">
+              <input type="color" id="grassColorPicker" value="#4ca03e" style="width:20px; height:18px; border:none; border-radius:4px; cursor:pointer; padding:0; background:none;">
+              <div style="display:flex; gap:3px;">
+                <button class="colorPreset" data-color="#4ca03e" title="Lush Green" style="width:13px; height:13px; border-radius:50%; background:#4ca03e; border:1px solid #fff; cursor:pointer; padding:0;"></button>
+                <button class="colorPreset" data-color="#c5af45" title="Golden Meadow" style="width:13px; height:13px; border-radius:50%; background:#c5af45; border:1px solid #fff; cursor:pointer; padding:0;"></button>
+                <button class="colorPreset" data-color="#256220" title="Deep Pine" style="width:13px; height:13px; border-radius:50%; background:#256220; border:1px solid #fff; cursor:pointer; padding:0;"></button>
+                <button class="colorPreset" data-color="#af572e" title="Autumn Glow" style="width:13px; height:13px; border-radius:50%; background:#af572e; border:1px solid #fff; cursor:pointer; padding:0;"></button>
+                <button class="colorPreset" data-color="#1ea476" title="Emerald Fantasy" style="width:13px; height:13px; border-radius:50%; background:#1ea476; border:1px solid #fff; cursor:pointer; padding:0;"></button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- GROUP 6: Level Persistence -->
+    <div class="accordion-group">
+      <div class="accordion-header">
+        <span>💾 Level Persistence</span>
+        <span class="accordion-arrow">▶</span>
+      </div>
+      <div class="accordion-content" style="display:none;">
+        <div style="display:flex; gap:4px; margin-top:2px;">
+          <button id="quickSaveStorageBtn" class="action-btn" style="flex:1; padding:4px 4px; font-size:10px; background:rgba(30,140,80,0.55);" title="Save whole world level to browser storage (Ctrl+S)">💾 Quick Save</button>
+          <button id="quickLoadStorageBtn" class="action-btn" style="flex:1; padding:4px 4px; font-size:10px; background:rgba(60,130,220,0.5);" title="Restore level from browser storage">📂 Quick Load</button>
+        </div>
+        <div style="display:flex; gap:4px; margin-top:4px;">
+          <button id="saveLevelBtn" class="action-btn" style="flex:1; padding:3px 4px; font-size:9.5px; background:rgba(255,255,255,0.15);" title="Download level as JSON file">⬇️ Export JSON</button>
+          <button id="loadLevelBtn" class="action-btn" style="flex:1; padding:3px 4px; font-size:9.5px; background:rgba(255,255,255,0.15);" title="Upload a saved level JSON file">⬆️ Import JSON</button>
+        </div>
+        <input id="levelFileInput" type="file" accept=".json,application/json" style="display:none;">
+      </div>
+    </div>
+
+    <!-- GROUP 7: Performance & Render Modes -->
+    <div class="accordion-group">
+      <div class="accordion-header">
+        <span>⚙️ Performance & View</span>
+        <span class="accordion-arrow">▶</span>
+      </div>
+      <div class="accordion-content" style="display:none;">
+        <div style="display:flex; flex-direction:column; gap:5px;">
+          <button id="fxBtn" class="action-btn" style="background:rgba(230, 140, 30, 0.45);">⚡ Quest Mode: FX OFF (P)</button>
+          <button id="outlineBtn" class="action-btn" style="background:rgba(255, 255, 255, 0.15);" title="Cycle Cel Outlines (Off / ⚡ Frag 0-Tris / 📐 Shell Hull)">✒️ Cel Outline: OFF</button>
+          <button id="sideOutlineBtn" style="display:none;"></button>
+          <div style="display:flex; gap:3px; margin-top:-2px;">
+            <button id="outlineModeOffBtn" class="mini-btn active" style="flex:1; padding:3px 2px;" title="Disable outlines completely">Off</button>
+            <button id="outlineModeFragBtn" class="mini-btn" style="flex:1.3; padding:3px 2px; color:#ffd57e;" title="Fragment-Only Fake Normal Edge Outline (Zero extra triangles)">⚡ Frag (0 Tris)</button>
+            <button id="outlineModeShellBtn" class="mini-btn" style="flex:1.2; padding:3px 2px; color:#38bdf8;" title="Inverted Hull Geometric Shell (Double mesh pass)">📐 Shell</button>
+          </div>
+          <button id="vrCanvasUIBtn" class="action-btn" style="background:rgba(255, 255, 255, 0.15);" title="Toggle In-VR Canvas Floating Tablet & Wrist Monitor UI">🥽 VR Canvas UI: OFF</button>
+          <button id="sideVrCanvasUIBtn" style="display:none;"></button>
+          <a href="/cutout_grass.glb" download="cutout_grass.glb" class="action-btn" style="text-decoration:none; background:rgba(76, 160, 62, 0.4);">📥 Download GLB (40 tris)</a>
+        </div>
+      </div>
+    </div>
+  
 </div>
 
 <script type="importmap">
@@ -519,10 +682,31 @@
   "imports": {
     "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
     "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
-    "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@3/lib/three-vrm.module.js"
+    "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@3/lib/three-vrm.module.js",
+    "@pixiv/three-vrm-animation": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm-animation@3/lib/three-vrm-animation.module.js"
   }
 }
 </script>
 <script type="module" src="./src/main.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.accordion-header').forEach((hdr) => {
+    hdr.addEventListener('click', () => {
+      const content = hdr.nextElementSibling;
+      const arrow = hdr.querySelector('.accordion-arrow');
+      const isExpanded = content.style.display !== 'none';
+      if (isExpanded) {
+        content.style.display = 'none';
+        hdr.classList.remove('active');
+        if (arrow) arrow.textContent = '▶';
+      } else {
+        content.style.display = 'block';
+        hdr.classList.add('active');
+        if (arrow) arrow.textContent = '▼';
+      }
+    });
+  });
+});
+</script>
 </body>
 </html>
