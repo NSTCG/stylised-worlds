@@ -186,7 +186,7 @@ function addWaterScroll(material) {
 }
 
 export function createWater(scene) {
-  const waterGeo = new THREE.PlaneGeometry(520, 520, 128, 128);
+  const waterGeo = new THREE.PlaneGeometry(520, 520, 1, 1);
   waterGeo.rotateX(-Math.PI / 2);
 
   const cubeRT = new THREE.WebGLCubeRenderTarget(256, {
@@ -248,22 +248,7 @@ export function createWater(scene) {
       }
     }
 
-    // Dynamic wave ripples on CPU in non-VR mode
-    if (!renderer.xr.isPresenting && frame % 2 === 0) {
-      const wpos = waterGeo.attributes.position;
-      for (let i = 0; i < wpos.count; i++) {
-        const x = wpos.getX(i), z = wpos.getZ(i);
-        const w1 = x * 0.058 + z * 0.032 + t * 0.7;
-        const w2 = x * 0.022 + z * 0.075 - t * 0.55;
-        const w3 = (x * 0.04 - z * 0.045) + t * 0.4;
-        wpos.setY(i,
-          Math.sin(w1) * 0.065
-        + Math.sin(w2) * 0.045
-        + Math.cos(w3) * 0.035
-        );
-      }
-      wpos.needsUpdate = true;
-    }
+    // CPU wave ripples DISABLED for performance — waves are already animated in the fragment shader
   }
 
   return { water, waterGeo, cubeCam, updateWater, waterUniforms };

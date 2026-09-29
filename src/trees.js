@@ -144,23 +144,23 @@ function createPaletteTexture(bottomColor, topColor, w = 16, h = 256) {
 }
 
 export function buildTrees(scene) {
-  const N_CONIFER = 1050, N_BROAD = 700;
+  const N_CONIFER = 400, N_BROAD = 250;
   const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), P = new THREE.Vector3(), S = new THREE.Vector3();
   const E = new THREE.Euler();
   const color = new THREE.Color();
 
   // geometries -------------------------------------------------------
-  const trunkCone = new THREE.CylinderGeometry(0.14, 0.34, 3.2, 10).translate(0, 1.6, 0);
-  const trunkBroad = new THREE.CylinderGeometry(0.2, 0.45, 4.2, 10).translate(0, 2.1, 0);
+  const trunkCone = new THREE.CylinderGeometry(0.14, 0.34, 3.2, 5).translate(0, 1.6, 0);
+  const trunkBroad = new THREE.CylinderGeometry(0.2, 0.45, 4.2, 5).translate(0, 2.1, 0);
 
-  const c1 = new THREE.ConeGeometry(1.55, 2.3, 10).translate(0, 3.3, 0);
-  const c2 = new THREE.ConeGeometry(1.18, 2.0, 10).translate(0, 4.5, 0);
-  const c3 = new THREE.ConeGeometry(0.8, 1.8, 10).translate(0, 5.6, 0);
+  const c1 = new THREE.ConeGeometry(1.55, 2.3, 5).translate(0, 3.3, 0);
+  const c2 = new THREE.ConeGeometry(1.18, 2.0, 5).translate(0, 4.5, 0);
+  const c3 = new THREE.ConeGeometry(0.8, 1.8, 5).translate(0, 5.6, 0);
   const coniferCanopy = mergeGeometries([c1, c2, c3]);
 
-  const b1 = new THREE.IcosahedronGeometry(1.7, 2).translate(0, 5.4, 0);
-  const b2 = new THREE.IcosahedronGeometry(1.25, 2).translate(1.1, 4.7, 0.45);
-  const b3 = new THREE.IcosahedronGeometry(1.15, 2).translate(-1.0, 4.8, -0.4);
+  const b1 = new THREE.IcosahedronGeometry(1.7, 1).translate(0, 5.4, 0);
+  const b2 = new THREE.IcosahedronGeometry(1.25, 1).translate(1.1, 4.7, 0.45);
+  const b3 = new THREE.IcosahedronGeometry(1.15, 1).translate(-1.0, 4.8, -0.4);
   const broadCanopy = mergeGeometries([b1, b2, b3]);
 
   // Height-based UV unwrapping so texture fades cleanly between 2 colors

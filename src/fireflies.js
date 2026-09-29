@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { groundHeight, pathFactor, terrainAlbedo } from './terrain.js';
 
-export const FIREFLY_N = 3600;
+export const FIREFLY_N = 800;
 
 export function createFireflies(scene) {
   const fireflyBase = new Float32Array(FIREFLY_N * 3);

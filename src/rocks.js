@@ -3,8 +3,8 @@ import { groundHeight, pathCenterZ, PATH_RADIUS, terrainAlbedo } from './terrain
 import { addGroundBlend } from './groundBlend.js';
 
 export function buildRocks(scene) {
-  const N_ROCKS = 130;
-  const rockGeo = new THREE.DodecahedronGeometry(0.75, 1);
+  const N_ROCKS = 60;
+  const rockGeo = new THREE.DodecahedronGeometry(0.75, 0);
   // Organic deformation of vertices
   const rpos = rockGeo.attributes.position;
   for (let j = 0; j < rpos.count; j++) {

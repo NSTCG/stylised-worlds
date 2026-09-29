@@ -6,7 +6,7 @@ export function createMountain(scene) {
   const ang = Math.PI + 0.88;
   const cx = Math.cos(ang) * 192, cz = Math.sin(ang) * 192;
   const H = 118, BASE = 78, SINK = 40; // deep base: rises from sea
-  const geo = new THREE.ConeGeometry(BASE, H, 26, 9);
+  const geo = new THREE.ConeGeometry(BASE, H, 12, 5);
   geo.translate(0, H / 2 - SINK, 0);
   const pos = geo.attributes.position;
   const colors = new Float32Array(pos.count * 3);

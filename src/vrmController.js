@@ -81,6 +81,10 @@ export class VRMCharacterController {
     this.keys = { w: false, a: false, s: false, d: false, shift: false, space: false };
     this.isMoving = false;
     this.isMouseDown = false;
+
+    // Touch / Mobile Input (auto-detected)
+    this.isTouchDevice = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+    this.touchMove = { x: 0, z: 0 };
     this.lastMouseX = 0;
     this.lastMouseY = 0;
     this.isVRDetached = false;
@@ -658,6 +662,82 @@ export class VRMCharacterController {
         }
       }
     });
+    this._setupTouchControls();
+  }
+
+  /* ---------------------------------------------------------- Touch Controls (Mobile) */
+
+  _setupTouchControls() {
+    if (!this.isTouchDevice) return;
+
+    document.body.style.touchAction = 'none';
+
+    // Minimal joystick UI (base + knob, shown while right-half touch is active)
+    const base = document.createElement('div');
+    const knob = document.createElement('div');
+    Object.assign(base.style, { position: 'fixed', width: '92px', height: '92px', borderRadius: '50%', border: '1.5px solid rgba(255,255,255,0.35)', background: 'rgba(255,255,255,0.06)', display: 'none', pointerEvents: 'none', zIndex: '9998' });
+    Object.assign(knob.style, { position: 'fixed', width: '42px', height: '42px', borderRadius: '50%', background: 'rgba(255,255,255,0.3)', border: '1.5px solid rgba(255,255,255,0.5)', display: 'none', pointerEvents: 'none', zIndex: '9999' });
+    document.body.append(base, knob);
+
+    const JOY_R = 46; // px travel radius
+    let lookId = null, joyId = null, lastTX = 0, lastTY = 0, joyOX = 0, joyOY = 0;
+
+    const onDown = (e) => {
+      if (this._isInspectOrTransformActive()) return;
+      for (const t of e.changedTouches) {
+        if (t.target.closest && t.target.closest('button, input, select, textarea, a, .panel')) continue;
+        if (t.clientX < window.innerWidth / 2) {
+          if (lookId === null) { lookId = t.identifier; lastTX = t.clientX; lastTY = t.clientY; e.preventDefault(); }
+        } else {
+          if (joyId === null) {
+            joyId = t.identifier; joyOX = t.clientX; joyOY = t.clientY;
+            base.style.display = 'block'; knob.style.display = 'block';
+            base.style.left = (joyOX - 46) + 'px'; base.style.top = (joyOY - 46) + 'px';
+            knob.style.left = (joyOX - 21) + 'px'; knob.style.top = (joyOY - 21) + 'px';
+            e.preventDefault();
+          }
+        }
+      }
+    };
+
+    const onMove = (e) => {
+      if (lookId === null && joyId === null) return;
+      e.preventDefault();
+      for (const t of e.changedTouches) {
+        if (t.identifier === lookId) {
+          this.orbitYaw -= (t.clientX - lastTX) * 0.0055;
+          this.orbitPitch = THREE.MathUtils.clamp(this.orbitPitch - (t.clientY - lastTY) * 0.0055, -1.25, 1.25);
+          lastTX = t.clientX; lastTY = t.clientY;
+        } else if (t.identifier === joyId) {
+          let vx = t.clientX - joyOX, vy = t.clientY - joyOY;
+          const len = Math.hypot(vx, vy);
+          if (len > JOY_R) { vx *= JOY_R / len; vy *= JOY_R / len; }
+          knob.style.left = (joyOX + vx - 21) + 'px';
+          knob.style.top = (joyOY + vy - 21) + 'px';
+          this.touchMove.x = vx / JOY_R;   // right = strafe right
+          this.touchMove.z = -vy / JOY_R;  // up = forward
+        }
+      }
+    };
+
+    const onUp = (e) => {
+      for (const t of e.changedTouches) {
+        if (t.identifier === lookId) lookId = null;
+        if (t.identifier === joyId) {
+          joyId = null;
+          this.touchMove.x = 0; this.touchMove.z = 0;
+          base.style.display = 'none'; knob.style.display = 'none';
+        }
+      }
+    };
+
+    window.addEventListener('touchstart', onDown, { passive: false });
+    window.addEventListener('touchmove', onMove, { passive: false });
+    window.addEventListener('touchend', onUp);
+    window.addEventListener('touchcancel', onUp);
+
+    const hud = document.getElementById('hudHelp');
+    if (hud) hud.innerHTML = '<b>Left half:</b> Look around &nbsp;·&nbsp; <b>Right half:</b> Move joystick';
   }
 
   /* ---------------------------------------------------------- Main Update Loop */
@@ -705,18 +785,18 @@ export class VRMCharacterController {
     if (this._isInspectOrTransformActive()) {
       this.isMoving = false;
       this.keys.w = false; this.keys.a = false; this.keys.s = false; this.keys.d = false;
-      this.walkCycle = THREE.MathUtils.lerp(this.walkCycle, Math.round(this.walkCycle / Math.PI) * Math.PI, 0.12);
+      this.touchMove.x = 0; this.touchMove.z = 0;
       this._animateDesktopBody(false, dt);
       return;
     }
 
-    let moveX = 0, moveZ = 0;
+    let moveX = this.touchMove.x, moveZ = this.touchMove.z;
     if (this.keys.w) moveZ -= 1;
     if (this.keys.s) moveZ += 1;
     if (this.keys.a) moveX -= 1;
     if (this.keys.d) moveX += 1;
 
-    this.isMoving = (moveX !== 0 || moveZ !== 0);
+    this.isMoving = Math.hypot(moveX, moveZ) > 0.05;
     const currentSpeed = (this.keys.shift ? this.speed * this.sprintMultiplier : this.speed);
 
     if (this.isMoving) {

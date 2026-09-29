@@ -223,7 +223,7 @@ export function setupEnvironment(scene) {
     `
   });
 
-  const sky = new THREE.Mesh(new THREE.SphereGeometry(480, 32, 16), skyMat);
+  const sky = new THREE.Mesh(new THREE.SphereGeometry(280, 16, 8), skyMat);
   sky.name = 'sky_dome';
   scene.add(sky);
 
@@ -231,10 +231,10 @@ export function setupEnvironment(scene) {
   const dirLight = new THREE.DirectionalLight(0xffecd0, envConfig.sunIntensity);
   dirLight.name = 'sun_light';
   dirLight.castShadow = true;
-  dirLight.shadow.mapSize.set(2048, 2048);
-  dirLight.shadow.camera.left = -80;  dirLight.shadow.camera.right = 80;
-  dirLight.shadow.camera.top  =  80;  dirLight.shadow.camera.bottom = -80;
-  dirLight.shadow.camera.near = 30;   dirLight.shadow.camera.far = 300;
+  dirLight.shadow.mapSize.set(512, 512);
+  dirLight.shadow.camera.left = -40;  dirLight.shadow.camera.right = 40;
+  dirLight.shadow.camera.top  =  40;  dirLight.shadow.camera.bottom = -40;
+  dirLight.shadow.camera.near = 30;   dirLight.shadow.camera.far = 200;
   dirLight.shadow.bias = -0.0004;
   dirLight.shadow.normalBias = 0.5;
   scene.add(dirLight, dirLight.target);
@@ -242,11 +242,11 @@ export function setupEnvironment(scene) {
   // Directional Light 2 (Dedicated Night Moon Light - active 18:00 to 06:00)
   const moonLight = new THREE.DirectionalLight(0xb4d8ff, 0.0);
   moonLight.name = 'moon_light';
-  moonLight.castShadow = true;
-  moonLight.shadow.mapSize.set(2048, 2048);
-  moonLight.shadow.camera.left = -80;  moonLight.shadow.camera.right = 80;
-  moonLight.shadow.camera.top  =  80;  moonLight.shadow.camera.bottom = -80;
-  moonLight.shadow.camera.near = 30;   moonLight.shadow.camera.far = 300;
+  moonLight.castShadow = false; // Disabled for low-end performance
+  moonLight.shadow.mapSize.set(512, 512);
+  moonLight.shadow.camera.left = -40;  moonLight.shadow.camera.right = 40;
+  moonLight.shadow.camera.top  =  40;  moonLight.shadow.camera.bottom = -40;
+  moonLight.shadow.camera.near = 30;   moonLight.shadow.camera.far = 200;
   moonLight.shadow.bias = -0.0004;
   moonLight.shadow.normalBias = 0.5;
   scene.add(moonLight, moonLight.target);

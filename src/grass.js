@@ -4,17 +4,17 @@ import { windUniforms } from './wind.js';
 import { getTerrainDataTexture, getGrassMaskTexture, TERRAIN_BOUNDS } from './terrain.js';
 
 export const grassConfig = {
-  maxPool: 180000,
-  currentCount: 62000,
-  density: 16, // blades / m²
-  userRadius: 35.0, // meters
+  maxPool: 40000,
+  currentCount: 12000,
+  density: 6, // blades / m²  (low-end preset: was 16)
+  userRadius: 20.0, // meters   (low-end preset: was 35)
   heightScale: 1.0, // global height scale factor
   currentColor: '#4ca03e'
 };
 
 export const grassUniforms = {
   uPlayerPos:        { value: new THREE.Vector3(21, 5.5, 25) },
-  uGrassRadius:      { value: 35.0 },
+  uGrassRadius:      { value: 20.0 },
   uGrassHeightScale: { value: 1.0 },
   uGrassColor:       { value: new THREE.Color(0x4ca03e) },
   uTerrainDataMap:   { value: null },

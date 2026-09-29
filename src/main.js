@@ -39,7 +39,7 @@ const app = document.getElementById('app');
 const canvas = document.createElement('canvas');
 const glContext = canvas.getContext('webgl2', { antialias: true });
 const renderer = new THREE.WebGLRenderer({ canvas, context: glContext, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setPixelRatio(1.5);
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -50,7 +50,7 @@ renderer.toneMappingExposure = 1.0;
 app.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 600);
+const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.5, 300);
 camera.position.set(21, 5.5, 25);
 
 const clock = new THREE.Clock();
@@ -283,10 +283,10 @@ function _refreshGlbList() {
     b.style.padding = '2px 5px';
     b.style.background = 'none';
     b.style.border = 'none';
-    b.addEventListener('click', () => { 
-      selectGlbAsset(name); 
+    b.addEventListener('click', () => {
+      selectGlbAsset(name);
       terrainEditor.setBrush('glb');
-      _refreshGlbList(); 
+      _refreshGlbList();
     });
 
     const inspBtn = document.createElement('button');
@@ -333,10 +333,10 @@ const glbFileInput = document.getElementById('glbFileInput');
 if (glbFileInput) {
   glbFileInput.addEventListener('change', async (e) => {
     for (const file of e.target.files) {
-      try { 
-        await loadGlbFile(file); 
+      try {
+        await loadGlbFile(file);
         showNotification(`Loaded GLB: ${file.name}`, 'success');
-      } catch (err) { 
+      } catch (err) {
         console.error('GLB load failed:', file.name, err);
         showNotification(`Failed to load: ${file.name}`, 'error');
       }

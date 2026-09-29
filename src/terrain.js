@@ -313,7 +313,7 @@ export function getGroundMesh() {
 }
 
 export function createGround(scene) {
-  const geo = new THREE.PlaneGeometry(440, 440, 200, 200);
+  const geo = new THREE.PlaneGeometry(440, 440, 100, 100);
   geo.rotateX(-Math.PI / 2);
   const pos = geo.attributes.position;
   const colors = new Float32Array(pos.count * 3);
