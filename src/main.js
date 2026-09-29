@@ -47,10 +47,11 @@ renderer.shadowMap.autoUpdate = false;
 renderer.shadowMap.needsUpdate = true;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
+renderer.xr.setFoveation(1); // Max fixed foveated rendering for Quest 2 (72-90 FPS target)
 app.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.5, 300);
+const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.5, 600);
 camera.position.set(21, 5.5, 25);
 
 const clock = new THREE.Clock();
@@ -419,14 +420,16 @@ window.envConfig = envConfig;
 // Hook Whispering Valley Level 1 quick map & model upgrade
 const whisperingValleyBtn = document.getElementById('whisperingValleyBtn');
 if (whisperingValleyBtn) {
-  whisperingValleyBtn.addEventListener('click', () => {
-    buildWhisperingValley(scene, camera, controls);
+  whisperingValleyBtn.addEventListener('click', async () => {
+    await buildWhisperingValley(scene, camera, controls);
+    hookAtmosphericFogToScene(scene);
   });
 }
 const upgradeValleyModelsBtn = document.getElementById('upgradeValleyModelsBtn');
 if (upgradeValleyModelsBtn) {
-  upgradeValleyModelsBtn.addEventListener('click', () => {
-    upgradeValleyPrototypesToMesh(scene, camera, controls);
+  upgradeValleyModelsBtn.addEventListener('click', async () => {
+    await upgradeValleyPrototypesToMesh(scene, camera, controls);
+    hookAtmosphericFogToScene(scene);
   });
 }
 window.buildWhisperingValley = () => buildWhisperingValley(scene, camera, controls);
@@ -449,8 +452,9 @@ if (loadLevelToggleBtn) {
 window.setLoadLevel = _setLoadLevel;
 
 // Auto-build Whispering Valley scene on launch for immediate testing
-setTimeout(() => {
-  buildWhisperingValley(scene, camera, controls);
+setTimeout(async () => {
+  await buildWhisperingValley(scene, camera, controls);
+  hookAtmosphericFogToScene(scene);
 }, 600);
 
 // Hook Side Panel Collapsing into Gear Icon & Visibility

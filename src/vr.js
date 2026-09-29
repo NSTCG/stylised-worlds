@@ -346,8 +346,8 @@ export function setupVR(renderer, scene, camera, player, getIsWalkMode, controls
         const rates = Array.from(session.supportedFrameRates);
         const rate90 = rates.find(r => Math.round(r) === 90);
         const rate72 = rates.find(r => Math.round(r) === 72);
-        if (rate90) session.updateTargetFrameRate(rate90).catch(() => {});
-        else if (rate72) session.updateTargetFrameRate(rate72).catch(() => {});
+        if (rate72) session.updateTargetFrameRate(rate72).catch(() => {});
+        else if (rate90) session.updateTargetFrameRate(rate90).catch(() => {});
       }
       try {
         if (session.renderState?.baseLayer && 'fixedFoveation' in session.renderState.baseLayer) {

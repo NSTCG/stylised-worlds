@@ -594,7 +594,7 @@ export class VRMCharacterController {
       this.lastMouseY = e.clientY;
 
       this.orbitYaw -= deltaX * 0.0055;
-      this.orbitPitch -= deltaY * 0.0055;
+      this.orbitPitch += deltaY * 0.0055;
       this.orbitPitch = THREE.MathUtils.clamp(this.orbitPitch, -1.25, 1.25);
     });
 
@@ -706,7 +706,7 @@ export class VRMCharacterController {
       for (const t of e.changedTouches) {
         if (t.identifier === lookId) {
           this.orbitYaw -= (t.clientX - lastTX) * 0.0055;
-          this.orbitPitch = THREE.MathUtils.clamp(this.orbitPitch - (t.clientY - lastTY) * 0.0055, -1.25, 1.25);
+          this.orbitPitch = THREE.MathUtils.clamp(this.orbitPitch + (t.clientY - lastTY) * 0.0055, -1.25, 1.25);
           lastTX = t.clientX; lastTY = t.clientY;
         } else if (t.identifier === joyId) {
           let vx = t.clientX - joyOX, vy = t.clientY - joyOY;
@@ -715,7 +715,7 @@ export class VRMCharacterController {
           knob.style.left = (joyOX + vx - 21) + 'px';
           knob.style.top = (joyOY + vy - 21) + 'px';
           this.touchMove.x = vx / JOY_R;   // right = strafe right
-          this.touchMove.z = -vy / JOY_R;  // up = forward
+          this.touchMove.z = vy / JOY_R;   // up = forward
         }
       }
     };

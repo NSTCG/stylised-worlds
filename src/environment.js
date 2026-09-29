@@ -51,8 +51,9 @@ THREE.ShaderChunk.fog_fragment = `
     vec3 dirFogColor = fogColor;
     if (dot(uAtmoHorizon, uAtmoHorizon) > 0.001 && dot(vAtmosphereViewDir, vAtmosphereViewDir) > 0.0001) {
       vec3 d = normalize(vAtmosphereViewDir);
-      float h = clamp(d.y * 1.5 + 0.15, 0.0, 1.0);
-      dirFogColor = mix(uAtmoHorizon, uAtmoZenith, pow(h, 0.52));
+      float h = clamp(d.y, -0.15, 1.0);
+      dirFogColor = mix(uAtmoHorizon, uAtmoZenith, pow(max(h, 0.0), 0.52));
+      dirFogColor = mix(dirFogColor, uAtmoHorizon * 0.96, smoothstep(0.04, -0.15, h));
 
       // Directional forward scattering towards Sun
       float sDot = dot(d, uAtmoSunDir);
@@ -423,7 +424,7 @@ export function applyAtmosphericFog(material) {
     if (!shader.fragmentShader.includes('uFragOutlineActive')) {
       shader.fragmentShader = 'uniform float uFragOutlineActive;\n' + shader.fragmentShader;
       shader.fragmentShader = shader.fragmentShader.replace(
-        '#include <dithering_fragment>',
+        '#include <fog_fragment>',
         `
         if (uFragOutlineActive > 0.01) {
           float nDotV = abs(dot(normal, normalize(-vViewPosition)));
@@ -433,7 +434,7 @@ export function applyAtmosphericFog(material) {
           float edge = smoothstep(0.28, 0.08, nDotV) * 0.85 + smoothstep(0.35, 0.75, normalEdge) * 0.75;
           gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(0.06, 0.08, 0.06), clamp(edge * uFragOutlineActive, 0.0, 0.95));
         }
-        #include <dithering_fragment>
+        #include <fog_fragment>
         `
       );
     }
