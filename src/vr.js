@@ -334,6 +334,10 @@ export function setupVR(renderer, scene, camera, player, getIsWalkMode, controls
   renderer.xr.setFoveation(1.0); // Maximum fixed foveation for Quest 2/3/Pro
 
   renderer.xr.addEventListener('sessionstart', () => {
+    const gl = renderer.getContext();
+    const hasMultiview = gl.getExtension('OVR_multiview2') || gl.getExtension('OCULUS_multiview');
+    console.log("Is Multiview active in WebGL?", !!hasMultiview);
+    window.updateStatsUI?.();
     controls.enabled = false;
     renderer.xr.setFoveation(1.0);
     const session = renderer.xr.getSession();
@@ -388,6 +392,7 @@ export function setupVR(renderer, scene, camera, player, getIsWalkMode, controls
     controls.enabled = !getIsWalkMode();
     camera.position.copy(cameraRig.position).add(new THREE.Vector3(0, 1.72, 0));
     cameraRig.position.set(0, 0, 0);
+    window.updateStatsUI?.();
 
     // Reset and repose avatar upon exiting VR and reapply desktop animations
     if (window.vrmController) {

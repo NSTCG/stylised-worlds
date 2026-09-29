@@ -283,6 +283,14 @@
           <span style="color:#7ef088; font-weight:bold; font-size:12px;">▲ <span id="statTotalTri">...</span></span>
           <span style="color:rgba(235,245,225,0.65); font-size:10px; font-weight:bold;">TOTAL TRIS</span>
         </div>
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:5px; background:rgba(0,0,0,0.4); padding:4px 8px; border-radius:8px; border:1px solid rgba(255,255,255,0.12);">
+          <span style="color:#fbbf24; font-weight:bold; font-size:12px;">◉ <span id="statDrawCalls">...</span></span>
+          <span style="color:rgba(235,245,225,0.65); font-size:10px; font-weight:bold;">DRAW CALLS</span>
+        </div>
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:5px; background:rgba(0,0,0,0.4); padding:4px 8px; border-radius:8px; border:1px solid rgba(255,255,255,0.12);">
+          <span style="color:#a78bfa; font-weight:bold; font-size:12px;">👓 <span id="statMultiview">...</span></span>
+          <span style="color:rgba(235,245,225,0.65); font-size:10px; font-weight:bold;">MULTIVIEW</span>
+        </div>
         <div id="triBreakdownChips" style="display:flex; flex-wrap:wrap; gap:4px;">
           <!-- Populated dynamically by src/stats.js -->
         </div>
@@ -299,6 +307,9 @@
         <div style="display:flex; flex-direction:column; gap:4px;">
           <button id="whisperingValleyBtn" class="action-btn" style="background:linear-gradient(135deg, rgba(234, 179, 8, 0.4), rgba(74, 222, 128, 0.4)); border-color:#facc15; font-weight:bold;" title="Load Whispering Valley: Level 1 map with prototypes">
             🏔️ Whispering Valley: Level 1
+          </button>
+          <button id="loadLevelToggleBtn" class="action-btn active-toggle" style="background:linear-gradient(135deg, rgba(74, 222, 128, 0.4), rgba(59, 130, 246, 0.4)); border-color:#4ade80; font-weight:bold;" title="Toggle Whispering Valley level: ON loads it, OFF removes it from scene">
+            🎮 Load Level: ON
           </button>
           <button id="upgradeValleyModelsBtn" class="action-btn" style="background:linear-gradient(135deg, rgba(168, 85, 247, 0.4), rgba(59, 130, 246, 0.4)); border-color:#c084fc; font-weight:bold;" title="Replace Valley Prototypes with Actual 3D Models">
             🏛️ Load Actual Models (Meshes)

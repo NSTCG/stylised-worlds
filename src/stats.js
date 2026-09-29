@@ -89,6 +89,27 @@ export function setupStats(scene, renderer) {
       totalEl.title = `${stats.total.toLocaleString()} total triangles in scene`;
     }
 
+    const callsEl = document.getElementById('statDrawCalls');
+    if (callsEl) {
+      const calls = renderer.info.render.calls;
+      callsEl.textContent = formatFull(calls);
+      callsEl.title = `${calls} draw calls in the last rendered frame (renderer.info; VR counts both eyes)`;
+    }
+    const mvEl = document.getElementById('statMultiview');
+    if (mvEl) {
+      const gl = renderer.getContext();
+      const hasExt = !!(gl.getExtension('OVR_multiview2') || gl.getExtension('OCULUS_multiview'));
+      const presenting = renderer.xr.isPresenting;
+      const state = (hasExt && presenting) ? 'ACTIVE' : (hasExt ? 'READY' : 'OFF');
+      mvEl.textContent = state;
+      mvEl.style.color = state === 'ACTIVE' ? '#c4b5fd' : state === 'READY' ? '#fbbf24' : 'rgba(235,245,225,0.4)';
+      mvEl.title = state === 'ACTIVE'
+        ? 'OVR_multiview2 bound and XR session rendering single-pass multiview'
+        : state === 'READY'
+          ? 'Multiview extension available in this browser, but no XR session is presenting'
+          : 'Multiview extension not available in this WebGL context';
+    }
+
     const chipsEl = document.getElementById('triBreakdownChips');
     if (chipsEl) {
       chipsEl.innerHTML = `

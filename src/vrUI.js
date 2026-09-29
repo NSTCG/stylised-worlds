@@ -274,6 +274,7 @@ export function createVRUI(scene, cameraRig, envConfig = {}, toggleFlyModeCallba
 
     const totalTris = document.getElementById('statTotalTri')?.textContent || '...';
     const fpsText = document.getElementById('hudFps')?.textContent || '60 FPS';
+    const drawCalls = document.getElementById('statDrawCalls')?.textContent || '...';
 
     // Big Tris Card
     ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
@@ -291,12 +292,23 @@ export function createVRUI(scene, cameraRig, envConfig = {}, toggleFlyModeCallba
     ctx.fillStyle = '#38bdf8';
     ctx.font = 'bold 13px monospace';
     ctx.textAlign = 'right';
-    ctx.fillText(fpsText, CANVAS_W - 26, 164);
+    ctx.fillText(`${fpsText} · ${drawCalls} CALLS`, CANVAS_W - 26, 164);
     ctx.textAlign = 'left';
 
     ctx.fillStyle = 'rgba(235, 245, 225, 0.65)';
     ctx.font = '11px monospace';
     ctx.fillText('TOTAL RENDERED SCENE TRIANGLES', 24, 192);
+    const r = window.renderer;
+    let mvState = 'OFF';
+    if (r) {
+      const gl = r.getContext();
+      const hasExt = !!(gl.getExtension('OVR_multiview2') || gl.getExtension('OCULUS_multiview'));
+      mvState = (hasExt && r.xr.isPresenting) ? 'ACTIVE' : (hasExt ? 'READY' : 'OFF');
+    }
+    ctx.fillStyle = mvState === 'ACTIVE' ? '#c4b5fd' : mvState === 'READY' ? '#fbbf24' : 'rgba(235, 245, 225, 0.4)';
+    ctx.textAlign = 'right';
+    ctx.fillText(`👓 MULTIVIEW: ${mvState}`, CANVAS_W - 26, 192);
+    ctx.textAlign = 'left';
 
     // Breakdown list
     ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
@@ -344,13 +356,20 @@ export function createVRUI(scene, cameraRig, envConfig = {}, toggleFlyModeCallba
     ctx.font = 'bold 15px monospace';
     ctx.fillText('🗺️ MAP & LEVEL PROTOTYPES', 14, 114);
 
-    registerBtn('btn_valley_vr', 10, 128, CANVAS_W - 20, 60, '🏔️ Whispering Valley: Level 1', () => {
+    registerBtn('btn_load_level_vr', 10, 128, CANVAS_W - 20, 60, '🎮 Load Level: ON/OFF', () => {
+      document.getElementById('loadLevelToggleBtn')?.click();
+      const on = document.getElementById('loadLevelToggleBtn')?.classList.contains('active-toggle');
+      state.statusMsg = on ? 'Load Level ON — Whispering Valley loaded' : 'Load Level OFF — valley removed from scene';
+      renderUI();
+    }, false, 'rgba(74, 222, 128, 0.45)', 'ON: load Whispering Valley scene / OFF: remove it entirely');
+
+    registerBtn('btn_valley_vr', 10, 198, CANVAS_W - 20, 60, '🏔️ Whispering Valley: Level 1', () => {
       document.getElementById('whisperingValleyBtn')?.click();
       state.statusMsg = 'Loaded Whispering Valley: Level 1';
       renderUI();
     }, false, 'rgba(234, 179, 8, 0.45)', 'Load complete river valley, bridge, farmhouse & crops');
 
-    registerBtn('btn_upgrade_vr', 10, 198, CANVAS_W - 20, 60, '🏛️ Load Actual Models (Meshes)', () => {
+    registerBtn('btn_upgrade_vr', 10, 268, CANVAS_W - 20, 60, '🏛️ Load Actual Models (Meshes)', () => {
       document.getElementById('upgradeValleyModelsBtn')?.click();
       state.statusMsg = 'Upgraded prototype boxes to 3D GLB meshes!';
       renderUI();
@@ -358,20 +377,20 @@ export function createVRUI(scene, cameraRig, envConfig = {}, toggleFlyModeCallba
 
     ctx.fillStyle = 'rgba(255,255,255,0.05)';
     ctx.beginPath();
-    ctx.roundRect(10, 270, CANVAS_W - 20, 240, 10);
+    ctx.roundRect(10, 340, CANVAS_W - 20, 240, 10);
     ctx.fill();
 
     ctx.fillStyle = '#7ef088';
     ctx.font = 'bold 13px monospace';
-    ctx.fillText('✨ Whispering Valley Features:', 24, 300);
+    ctx.fillText('✨ Whispering Valley Features:', 24, 370);
     ctx.font = '12px monospace';
     ctx.fillStyle = 'rgba(235,245,225,0.85)';
-    ctx.fillText('• River channel carved with deep stone embankment', 24, 332);
-    ctx.fillText('• Wooden arched river bridge with lampposts', 24, 362);
-    ctx.fillText('• Half-timbered cottage with animated weathervane', 24, 392);
-    ctx.fillText('• Rotating Dutch windmill on north-western ridge', 24, 422);
-    ctx.fillText('• Red torii gate & mystic hilltop stone circle', 24, 452);
-    ctx.fillText('• Agricultural wheat crops and wooden fishing pier', 24, 482);
+    ctx.fillText('• River channel carved with deep stone embankment', 24, 402);
+    ctx.fillText('• Wooden arched river bridge with lampposts', 24, 432);
+    ctx.fillText('• Half-timbered cottage with animated weathervane', 24, 462);
+    ctx.fillText('• Rotating Dutch windmill on north-western ridge', 24, 492);
+    ctx.fillText('• Red torii gate & mystic hilltop stone circle', 24, 522);
+    ctx.fillText('• Agricultural wheat crops and wooden fishing pier', 24, 552);
   }
 
   // ---------------------------------------------------------------- TAB 3: AVATAR

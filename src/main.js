@@ -20,7 +20,7 @@ import { setupTransformManager, selectObject } from './transformManager.js';
 import { setupAssetBrowser, toggleAssetBrowser } from './assetBrowser.js';
 import { getAssetById } from './assetCatalog.js';
 import { openModelPreviewModal } from './modelPreviewModal.js';
-import { buildWhisperingValley, upgradeValleyPrototypesToMesh, updateFarmstead } from './whisperingValleyScene.js';
+import { buildWhisperingValley, upgradeValleyPrototypesToMesh, updateFarmstead, removeWhisperingValley } from './whisperingValleyScene.js';
 import { VRMCharacterController } from './vrmController.js';
 import { toggleOutline, setOutlineEnabled, setOutlineMode, getOutlineMode, cycleOutlineMode, attachOutlinesToScene } from './outlineEffect.js';
 
@@ -35,7 +35,10 @@ window.toggleOutline = (modeOrBool) => {
 
 /* ---------------------------------------------------------- renderer & scene */
 const app = document.getElementById('app');
-const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+// Manually build a WebGL2 context with antialias off so Three.js can bind OVR_multiview2 in XR
+const canvas = document.createElement('canvas');
+const glContext = canvas.getContext('webgl2', { antialias: true });
+const renderer = new THREE.WebGLRenderer({ canvas, context: glContext, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
@@ -428,6 +431,22 @@ if (upgradeValleyModelsBtn) {
 }
 window.buildWhisperingValley = () => buildWhisperingValley(scene, camera, controls);
 window.upgradeValleyPrototypesToMesh = () => upgradeValleyPrototypesToMesh(scene, camera, controls);
+// Load Level Toggle: ON builds Whispering Valley, OFF removes it entirely from scene
+const loadLevelToggleBtn = document.getElementById('loadLevelToggleBtn');
+function _setLoadLevel(on) {
+  if (on) buildWhisperingValley(scene, camera, controls);
+  else removeWhisperingValley(scene);
+}
+if (loadLevelToggleBtn) {
+  loadLevelToggleBtn.addEventListener('click', () => {
+    const on = !loadLevelToggleBtn.classList.contains('active-toggle');
+    loadLevelToggleBtn.classList.toggle('active-toggle', on);
+    loadLevelToggleBtn.textContent = on ? '🎮 Load Level: ON' : '🎮 Load Level: OFF';
+    loadLevelToggleBtn.style.borderColor = on ? '#4ade80' : '#f87171';
+    _setLoadLevel(on);
+  });
+}
+window.setLoadLevel = _setLoadLevel;
 
 // Auto-build Whispering Valley scene on launch for immediate testing
 setTimeout(() => {

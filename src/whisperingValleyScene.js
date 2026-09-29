@@ -117,6 +117,32 @@ export async function upgradeValleyPrototypesToMesh(scene = null, camera = null,
   await _streamAndUpgradeGlbs(_valleyRoot);
   showNotification('✨ All Whispering Valley prototypes replaced with real 3D models!', 'success', 3500);
 }
+/**
+ * Removes the Whispering Valley scene entirely and frees its GPU resources.
+ */
+export function removeWhisperingValley(scene = null) {
+  if (_valleyRoot && _valleyRoot.parent) {
+    const parent = _valleyRoot.parent;
+    _valleyRoot.traverse((child) => {
+      if (child.geometry) child.geometry.dispose();
+      if (child.material) {
+        const mats = Array.isArray(child.material) ? child.material : [child.material];
+        for (const m of mats) {
+          for (const key of Object.keys(m)) {
+            const v = m[key];
+            if (v && typeof v === 'object' && v.isTexture) v.dispose();
+          }
+          m.dispose();
+        }
+      }
+    });
+    parent.remove(_valleyRoot);
+  }
+  _valleyRoot = null;
+  _vanes.length = 0;
+  _optimizedCache.clear();
+  if (scene) showNotification('🗑️ Whispering Valley unloaded — all valley content removed from scene', 'info', 2500);
+}
 
 /* ---------------------------------------------------------- 1. Real Terrain Sculpting */
 
