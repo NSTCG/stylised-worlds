@@ -20,6 +20,7 @@ import { groundHeight } from './terrain.js';
 import { windUniforms } from './wind.js';
 import { showNotification } from './levelSerializer.js';
 import { compressVRMBuffer, optimizeVRMScene } from './vrmOptimizer.js';
+import { createEmoteController, EMOTES } from './emoteController.js';
 
 export const AVAILABLE_AVATARS = [
   { id: 'alicia', name: 'Alicia Solid', url: './assets/vrm/AliciaSolid.vrm', desc: 'Classic Mascot (VRM 0.0)' },
@@ -128,7 +129,17 @@ export class VRMCharacterController {
     this.nextBlinkInterval = 3.5;
     this.breathingTime = 0;
 
+    // Emote / Facial Expression Controller
+    this.emoteController = createEmoteController(() => this.vrm);
+    this.emoteController.bindKeys();
+
     this._setupInputListeners();
+  }
+
+  setEmote(id, durationSec = 3) {
+    if (this.emoteController) {
+      this.emoteController.setEmote(id, durationSec);
+    }
   }
 
   /**
@@ -573,6 +584,10 @@ export class VRMCharacterController {
     window.addEventListener('mousedown', (e) => {
       // In Inspect mode or when interacting with gizmos, ignore character mouse look
       if (this._isInspectOrTransformActive()) return;
+      // When terrain editor brush is active and hovering terrain, reserve left-click strictly for painting
+      const isBrushPainting = e.button === 0 && !!(window.terrainEditor?.editorState?.active && window.terrainEditor?.editorState?.hasHit);
+      if (isBrushPainting) return;
+
       if (e.button === 0 || e.button === 2) {
         this.isMouseDown = true;
         this.lastMouseX = e.clientX;
@@ -765,6 +780,7 @@ export class VRMCharacterController {
 
     // Procedural Facial Expressions (Blink) & Idle Breathing
     this._updateExpressions(dt);
+    this.emoteController?.update(dt, performance.now() / 1000);
 
     // Camera Positioning (Desktop)
     if (!isVR) {
@@ -1121,10 +1137,17 @@ export class VRMCharacterController {
     }
 
     if (this.bones.head) {
-      this.bones.head.quaternion.copy(hmdQuat);
+      if (this.bones.head.parent) {
+        const headParentQuat = new THREE.Quaternion();
+        this.bones.head.parent.getWorldQuaternion(headParentQuat);
+        this.bones.head.quaternion.copy(headParentQuat.invert().multiply(hmdQuat));
+      } else {
+        this.bones.head.quaternion.copy(hmdQuat);
+      }
     }
     if (this.bones.spine) {
-      this.bones.spine.rotation.x = forward.y * 0.35;
+      const spinePitch = THREE.MathUtils.clamp(forward.y * 0.25, -0.35, 0.35);
+      this.bones.spine.quaternion.setFromAxisAngle(new THREE.Vector3(1, 0, 0), spinePitch);
     }
 
     // 3. Two-Bone Inverse Kinematics for Left & Right Controllers / Hands
@@ -1271,7 +1294,11 @@ export class VRMCharacterController {
       const lowerQuat = new THREE.Quaternion();
       lowerArm.getWorldQuaternion(lowerQuat);
       const lowerQuatInv = lowerQuat.clone().invert();
-      hand.quaternion.copy(lowerQuatInv.multiply(targetQuat));
+      const wristAlign = new THREE.Quaternion().setFromEuler(
+        new THREE.Euler(0, sideName === 'left' ? -Math.PI * 0.5 : Math.PI * 0.5, 0)
+      );
+      const alignedTarget = targetQuat.clone().multiply(wristAlign);
+      hand.quaternion.copy(lowerQuatInv.multiply(alignedTarget));
     }
   }
 

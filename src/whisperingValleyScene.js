@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { optimizeModel } from './modelOptimizer.js';
 import { registerObstacle, unregisterObstacle } from './treeRules.js';
+import { mergeProps, rebuildMerged, getPropNodes, dispose as disposePropMerger } from './propMerger.js';
 import { placeTreeAt, eraseTreesInRadius } from './trees.js';
 import { 
   getTerrainDataTexture, 
@@ -89,6 +90,13 @@ export async function buildWhisperingValley(scene, camera, controls) {
   // 7. Place all 14 GLB Props with calibrated realistic scales
   _placeAllProps(_valleyRoot);
 
+  // 7.5 Merge all props into a single mesh (per-prop ids retained for editing)
+  const propsGroup = _valleyRoot.getObjectByName('whispering_valley_props');
+  let mergeInfo = null;
+  if (propsGroup) {
+    mergeInfo = mergeProps(propsGroup);
+  }
+
   // 8. Position camera to match concept art viewpoint
   if (camera && controls) {
     camera.position.set(-8, 10.5, 27);
@@ -97,7 +105,11 @@ export async function buildWhisperingValley(scene, camera, controls) {
   }
 
   // 9. Prototypes are loaded by default. Use upgradeValleyPrototypesToMesh to swap with actual GLB models.
-  showNotification('✨ Whispering Valley: Level 1 Loaded (Prototypes)!', 'success', 3500);
+  if (mergeInfo) {
+    showNotification(`✨ Whispering Valley Loaded — ${mergeInfo.count} props merged into 1 mesh (${(mergeInfo.verts / 1000).toFixed(1)}k verts, ${mergeInfo.materials} draw calls)`, 'success', 4000);
+  } else {
+    showNotification('✨ Whispering Valley: Level 1 Loaded (Prototypes)!', 'success', 3500);
+  }
   return _valleyRoot;
 }
 
@@ -121,6 +133,9 @@ export async function upgradeValleyPrototypesToMesh(scene = null, camera = null,
  * Removes the Whispering Valley scene entirely and frees its GPU resources.
  */
 export function removeWhisperingValley(scene = null) {
+  // Retained (detached) prop nodes are not reachable by the scene traversal below,
+  // so capture them before tearing down the merger.
+  const retainedNodes = getPropNodes();
   if (_valleyRoot && _valleyRoot.parent) {
     const parent = _valleyRoot.parent;
     _valleyRoot.traverse((child) => {
@@ -141,6 +156,13 @@ export function removeWhisperingValley(scene = null) {
   _valleyRoot = null;
   _vanes.length = 0;
   _optimizedCache.clear();
+  // Free geometry of the detached prop nodes (shared with cleared asset cache, safe to dispose)
+  for (const node of retainedNodes) {
+    node.traverse((child) => {
+      if (child.geometry) child.geometry.dispose();
+    });
+  }
+  disposePropMerger();
   if (scene) showNotification('🗑️ Whispering Valley unloaded — all valley content removed from scene', 'info', 2500);
 }
 
@@ -1312,20 +1334,37 @@ async function _streamAndUpgradeGlbs(root) {
         _optimizedCache.set(key, wrapper);
       }
 
-      // Upgrade all matching placeholder instances in root
-      root.traverse((node) => {
-        if (node.isGroup && node.userData && node.userData.assetKey === key) {
-          while (node.children.length > 0) {
-            node.remove(node.children[0]);
+      // Upgrade all matching placeholder instances (nodes retained by propMerger after merge)
+      const retainedNodes = getPropNodes();
+      if (retainedNodes.length > 0) {
+        for (const node of retainedNodes) {
+          if (node.userData && node.userData.assetKey === key) {
+            while (node.children.length > 0) {
+              node.remove(node.children[0]);
+            }
+            const instance = wrapper.clone(true);
+            node.add(instance);
           }
-          const instance = wrapper.clone(true);
-          node.add(instance);
         }
-      });
+      } else {
+        // Fallback: props were never merged, upgrade in-scene nodes directly
+        root.traverse((node) => {
+          if (node.isGroup && node.userData && node.userData.assetKey === key) {
+            while (node.children.length > 0) {
+              node.remove(node.children[0]);
+            }
+            const instance = wrapper.clone(true);
+            node.add(instance);
+          }
+        });
+      }
 
     } catch (err) {
       console.warn(`[WhisperingValley] GLB streaming fallback for ${key}:`, err.message);
     }
   }
+
+  // Re-bake the single merged mesh with the upgraded GLB geometry
+  rebuildMerged();
 }
 

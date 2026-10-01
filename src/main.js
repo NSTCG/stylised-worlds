@@ -48,10 +48,25 @@ renderer.shadowMap.needsUpdate = true;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
 renderer.xr.setFoveation(1); // Max fixed foveated rendering for Quest 2 (72-90 FPS target)
+
+// Debug overdraw visualisation (toggle 'O' or in VR UI): every fragment adds a fixed amount into the cleared black buffer — brightness = layer count
+const _overdrawMat = new THREE.MeshBasicMaterial({ color: 0x242424, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, fog: false });
+let overdrawDebug = false;
+const _overdrawHud = document.createElement('div');
+Object.assign(_overdrawHud.style, { position: 'fixed', top: '10px', left: '50%', transform: 'translateX(-50%)', padding: '6px 12px', background: 'rgba(0,0,0,0.55)', color: '#7fd4ff', font: '12px monospace', borderRadius: '6px', display: 'none', zIndex: '10000', pointerEvents: 'none' });
+_overdrawHud.textContent = 'OVERDRAW DEBUG — press O to toggle';
+document.body.appendChild(_overdrawHud);
 app.appendChild(renderer.domElement);
 
+window.toggleOverdraw = () => {
+  overdrawDebug = !overdrawDebug;
+  _overdrawHud.style.display = overdrawDebug ? 'block' : 'none';
+  return overdrawDebug;
+};
+window.isOverdrawActive = () => overdrawDebug;
+
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.5, 600);
+const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.01, 600);
 camera.position.set(21, 5.5, 25);
 
 const clock = new THREE.Clock();
@@ -491,6 +506,10 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault();
     toggleSidePanel();
   }
+  if (e.key === 'o' || e.key === 'O') {
+    overdrawDebug = !overdrawDebug;
+    _overdrawHud.style.display = overdrawDebug ? 'block' : 'none';
+  }
 });
 
 /* ---------------------------------------------------------- main loop */
@@ -545,7 +564,8 @@ function tick() {
   recordFps();
 
   // Render dispatch (direct render for WebXR stereoscopic VR, or conditional composer on desktop)
-  if (renderer.xr.isPresenting) {
+  scene.overrideMaterial = overdrawDebug ? _overdrawMat : null;
+  if (renderer.xr.isPresenting || overdrawDebug) {
     renderer.render(scene, camera);
   } else if (isPostProcessingActive()) {
     composer.render();

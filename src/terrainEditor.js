@@ -20,7 +20,7 @@ import { rebuildTreesPCG, placeTreeAt, sampleTreeCluster, eraseTreesInRadius } f
 import { placementState, updateGhostPosition, confirmPlacement } from './assetsManager.js';
 
 export const editorState = {
-  active: false,
+  active: true,
   brushType: 'grass', // 'grass'|'no_grass'|'sand'|'road'|'water'|'raise'|'lower'|'smooth'|'rock'|'tree_stamp'|'tree_cluster'|'tree_eraser'
   treeType: 'conifer', // 'conifer'|'broad'
   brushRadius: 10.0,
@@ -285,6 +285,7 @@ export function setupTerrainEditor(scene, camera, domElement, glbHandle = null) 
       if (!editorState.active) return;
       const hit = raycastTerrain(e);
       if (hit) {
+        e.stopPropagation();
         if (placementState.active) {
           confirmPlacement(editorState.hitPoint.x, editorState.hitPoint.z);
         } else if (editorState.brushType === 'tree_stamp' || editorState.brushType === 'treeConifer' || editorState.brushType === 'treeBroad') {

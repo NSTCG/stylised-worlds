@@ -547,24 +547,47 @@ export function createVRUI(scene, cameraRig, envConfig = {}, toggleFlyModeCallba
       renderUI();
     }, isFlying, 'rgba(56, 189, 248, 0.45)');
 
-    // 5. Controls Guide Box
+    // 5. Facial Expressions & Emotes
+    ctx.fillStyle = '#7ef088';
+    ctx.font = 'bold 12.5px monospace';
+    ctx.fillText('😊 FACIAL EMOTES & EXPRESSIONS (Keys 1-6)', 14, 600);
+
+    const emotes = [
+      { id: 'happy', label: '😊 Happy' },
+      { id: 'sad', label: '😢 Sad' },
+      { id: 'angry', label: '😠 Angry' },
+      { id: 'surprised', label: '😮 Wow' },
+      { id: 'relaxed', label: '😌 Relax' },
+      { id: 'neutral', label: '😐 Reset' }
+    ];
+    const ew = 78;
+    emotes.forEach((em, idx) => {
+      const ex = 10 + idx * (ew + 6);
+      registerBtn(`btn_emote_${em.id}`, ex, 614, ew, 34, em.label, () => {
+        vrmCtrl?.setEmote?.(em.id, 4);
+        state.statusMsg = `Emote: ${em.label}`;
+        renderUI();
+      }, false, 'rgba(236, 72, 153, 0.45)');
+    });
+
+    // 6. Controls Guide Box
     ctx.fillStyle = 'rgba(0,0,0,0.45)';
     ctx.beginPath();
-    ctx.roundRect(10, 596, CANVAS_W - 20, 224, 10);
+    ctx.roundRect(10, 660, CANVAS_W - 20, 204, 10);
     ctx.fill();
 
     ctx.fillStyle = '#7ef088';
-    ctx.font = 'bold 12.5px monospace';
-    ctx.fillText('🎮 Meta Quest Controller Mapping:', 24, 622);
-    ctx.font = '11.5px monospace';
+    ctx.font = 'bold 12px monospace';
+    ctx.fillText('🎮 Meta Quest Controller Mapping:', 24, 682);
+    ctx.font = '11px monospace';
     ctx.fillStyle = '#eaf2df';
-    ctx.fillText('• Left Thumbstick: Walk / Soar along gaze vector', 24, 648);
-    ctx.fillText('• Right Thumbstick: 45° Snap Turning', 24, 674);
-    ctx.fillText('• Y Button (Left) / B (Right): Mount/Dismiss UI Tablet', 24, 700);
-    ctx.fillText('• X Button: Toggle 3D Flight / Ground Walk', 24, 726);
-    ctx.fillText('• Right Trigger: Laser click UI / Paint terrain', 24, 752);
-    ctx.fillText('• Drag & Drop: Drag any .vrm file into browser to load', 24, 778);
-    ctx.fillText('• WebXR Hands: Analytical 2-bone arm IK tracking active', 24, 804);
+    ctx.fillText('• Left Thumbstick: Walk / Soar along gaze vector', 24, 704);
+    ctx.fillText('• Right Thumbstick: 45° Snap Turning', 24, 726);
+    ctx.fillText('• Y Button (Left) / B (Right): Mount/Dismiss UI Tablet', 24, 748);
+    ctx.fillText('• X Button: Toggle 3D Flight / Ground Walk', 24, 770);
+    ctx.fillText('• Right Trigger: Laser click UI / Paint terrain', 24, 792);
+    ctx.fillText('• WebXR Hands: Two-bone arm IK tracking with wrist alignment', 24, 814);
+    ctx.fillText('• Hotkeys: 1-6 expressions · V inspect · C 1st/3rd person · O overdraw', 24, 836);
   }
 
   // ---------------------------------------------------------------- TAB 4: SCULPT
@@ -984,16 +1007,20 @@ export function createVRUI(scene, cameraRig, envConfig = {}, toggleFlyModeCallba
     }, `${hVal.toFixed(2)}m`);
 
     const dSlider = document.getElementById('grassDensitySlider');
-    const dVal = dSlider ? parseInt(dSlider.value) : 60000;
-    registerSlider('sl_grass_d', 10, 190, CANVAS_W - 20, 38, dVal, 10000, 120000, '🌱 Blade Density', (v) => {
-      if (dSlider) { dSlider.value = v; dSlider.dispatchEvent(new Event('input')); }
-    }, `${Math.round(dVal / 1000)}k`);
+    const dVal = dSlider ? parseInt(dSlider.value) : 16;
+    registerSlider('sl_grass_d', 10, 190, CANVAS_W - 20, 38, dVal, 2, 50, '🌱 Blade Density', (v) => {
+      const rounded = Math.round(v);
+      if (dSlider) { dSlider.value = rounded; dSlider.dispatchEvent(new Event('input')); }
+      if (window.setGrassDensity) window.setGrassDensity(rounded);
+    }, `${Math.round(dVal)}/m²`);
 
     const rSlider = document.getElementById('grassRadiusSlider');
-    const rVal = rSlider ? parseInt(rSlider.value) : 75;
-    registerSlider('sl_grass_r', 10, 250, CANVAS_W - 20, 38, rVal, 25, 120, '⭕ Render Radius', (v) => {
-      if (rSlider) { rSlider.value = v; rSlider.dispatchEvent(new Event('input')); }
-    }, `${rVal}m`);
+    const rVal = rSlider ? parseInt(rSlider.value) : 35;
+    registerSlider('sl_grass_r', 10, 250, CANVAS_W - 20, 38, rVal, 15, 65, '⭕ Render Radius', (v) => {
+      const rounded = Math.round(v);
+      if (rSlider) { rSlider.value = rounded; rSlider.dispatchEvent(new Event('input')); }
+      if (window.setGrassRadius) window.setGrassRadius(rounded);
+    }, `${Math.round(rVal)}m`);
 
     const bSlider = document.getElementById('groundBlendSlider');
     const bVal = bSlider ? parseFloat(bSlider.value) : 0.45;
@@ -1029,12 +1056,21 @@ export function createVRUI(scene, cameraRig, envConfig = {}, toggleFlyModeCallba
     ctx.font = 'bold 15px monospace';
     ctx.fillText('⚙️ PERFORMANCE, OUTLINES & PERSISTENCE', 14, 114);
 
-    registerBtn('btn_quest_fx', 10, 128, CANVAS_W - 20, 44, '⚡ Quest Mode FX (Toggle)', () => {
+    registerBtn('btn_quest_fx', 10, 128, 244, 42, '⚡ Quest FX', () => {
       document.getElementById('fxBtn')?.click();
       const txt = document.getElementById('fxBtn')?.textContent || 'FX Toggled';
       state.statusMsg = txt;
       renderUI();
     }, false, 'rgba(56, 189, 248, 0.35)');
+
+    const isOverdraw = typeof window !== 'undefined' && window.isOverdrawActive ? window.isOverdrawActive() : false;
+    registerBtn('btn_overdraw_toggle', 266, 128, 244, 42, isOverdraw ? '👁️ Overdraw: ON' : '👁️ Overdraw: OFF', () => {
+      if (window.toggleOverdraw) {
+        const on = window.toggleOverdraw();
+        state.statusMsg = on ? 'Overdraw Debug ON (Additive)' : 'Overdraw Debug OFF';
+      }
+      renderUI();
+    }, isOverdraw, isOverdraw ? 'rgba(234, 179, 8, 0.85)' : 'rgba(255, 255, 255, 0.12)');
 
     ctx.fillStyle = 'rgba(235, 245, 225, 0.7)';
     ctx.font = 'bold 11px monospace';

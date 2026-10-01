@@ -6,6 +6,8 @@ import * as THREE from 'three';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { groundHeight } from './terrain.js';
 import { updateGlbPlacement, removeGlbPlacement, duplicateGlbPlacement, findPlacementByObject } from './glbAssets.js';
+import { getMergedMesh, getPropsGroup, getPropEntry, propIdFromFace, updatePropTransform, removeProp, duplicateProp } from './propMerger.js';
+import { registerObstacle, unregisterObstacle } from './treeRules.js';
 import { setupModelMaterials } from './materialFeatures.js';
 import { showNotification } from './levelSerializer.js';
 
@@ -18,6 +20,11 @@ let _orbitControls = null;
 let _hudElement = null;
 let _isTransforming = false;
 let _editMode = false;
+
+// Merged-prop proxy: when a merged prop is selected, we create a temporary Object3D
+// at its position/rotation/scale so TransformControls can attach to it.
+let _mergedPropProxy = null;   // THREE.Object3D
+let _selectedMergedId = null;  // prop id string from propMerger
 
 export function setEditMode(enabled) {
   _editMode = !!enabled;
@@ -50,7 +57,11 @@ export function setupTransformManager(scene, camera, domElement, orbitControls) 
     }
     if (!event.value && _selectedObject) {
       // Finished dragging: update placement matrix & tree obstacle (GLB props only)
-      if (findPlacementByObject(_selectedObject)) {
+      if (_selectedMergedId) {
+        // Re-bake merged prop vertices from proxy transform
+        _selectedObject.updateMatrixWorld(true);
+        updatePropTransform(_selectedMergedId, _selectedObject.matrix);
+      } else if (findPlacementByObject(_selectedObject)) {
         updateGlbPlacement(_selectedObject);
       }
       _syncHudValues();
@@ -82,7 +93,21 @@ export function setupTransformManager(scene, camera, domElement, orbitControls) 
 
     raycaster.setFromCamera(mouse, camera);
 
-    // Collect all candidates (placed GLB props, level-built props like bridges/houses)
+    // 1. Try merged prop mesh first
+    const merged = getMergedMesh();
+    if (merged) {
+      const mHits = raycaster.intersectObject(merged, false);
+      if (mHits.length > 0) {
+        const faceIdx = mHits[0].faceIndex;
+        const propId = propIdFromFace(faceIdx);
+        if (propId) {
+          _selectMergedProp(propId);
+          return;
+        }
+      }
+    }
+
+    // 2. Fallback: non-merged candidates (placed GLB props, clusters)
     const candidates = [];
     scene.traverse((obj) => {
       if (!obj.name) return;
@@ -101,7 +126,6 @@ export function setupTransformManager(scene, camera, domElement, orbitControls) 
 
     const intersects = raycaster.intersectObjects(candidates, true);
     if (intersects.length > 0) {
-      // Find top-level editable model group
       let hit = intersects[0].object;
       while (hit.parent && hit.parent !== scene && !hit.userData?.assetId && !_isEditableRoot(hit)) {
         hit = hit.parent;
@@ -166,7 +190,9 @@ function _isEditableRoot(obj) {
 
 export function selectObject(object) {
   if (!object || _selectedObject === object) return;
+  _cleanupMergedProxy(); // clear any previous merged selection
   _selectedObject = object;
+  _selectedMergedId = null;
   _transformControls.attach(object);
   _showHud();
   _syncHudValues();
@@ -176,10 +202,45 @@ export function selectObject(object) {
   showNotification(`Selected: ${name} (W: Move · E: Rotate · R: Scale · G: Snap)`, 'info', 2200);
 }
 
+/** Select a prop inside the merged mesh by creating a proxy Object3D. */
+function _selectMergedProp(propId) {
+  const entry = getPropEntry(propId);
+  if (!entry) return;
+  _cleanupMergedProxy();
+
+  // Create a proxy Object3D at the prop's transform
+  _mergedPropProxy = new THREE.Object3D();
+  _mergedPropProxy.name = `proxy_${propId}`;
+  entry.matrix.decompose(_mergedPropProxy.position, _mergedPropProxy.quaternion, _mergedPropProxy.scale);
+  _mergedPropProxy.updateMatrixWorld(true);
+  const pg = getPropsGroup();
+  if (pg) pg.add(_mergedPropProxy); else _scene.add(_mergedPropProxy);
+
+  _selectedObject = _mergedPropProxy;
+  _selectedMergedId = propId;
+  _transformControls.attach(_mergedPropProxy);
+  _showHud();
+  _syncHudValues();
+
+  const label = entry.assetKey || propId;
+  showNotification(`Selected merged prop: ${label} (W: Move · E: Rotate · R: Scale · G: Snap)`, 'info', 2200);
+}
+
+function _cleanupMergedProxy() {
+  if (_mergedPropProxy) {
+    _transformControls.detach();
+    if (_mergedPropProxy.parent) _mergedPropProxy.parent.remove(_mergedPropProxy);
+    _mergedPropProxy = null;
+  }
+  _selectedMergedId = null;
+}
+
 export function deselectObject() {
   if (!_selectedObject) return;
+  _cleanupMergedProxy();
   _transformControls.detach();
   _selectedObject = null;
+  _selectedMergedId = null;
   _hideHud();
 }
 
@@ -194,20 +255,37 @@ export function snapSelectedToGround() {
   const pos = _selectedObject.position;
   const gh = groundHeight(pos.x, pos.z);
 
-  // Compute bounding box bottom offset
-  const box = new THREE.Box3().setFromObject(_selectedObject);
-  const curMinY = box.min.y;
-  const dy = gh - curMinY;
-
-  _selectedObject.position.y += dy;
-  _selectedObject.updateMatrixWorld(true);
-  if (findPlacementByObject(_selectedObject)) updateGlbPlacement(_selectedObject);
+  if (_selectedMergedId) {
+    // For merged props, use entry bbox to find bottom
+    const entry = getPropEntry(_selectedMergedId);
+    if (entry) {
+      const curMinY = entry.bboxMin.y + pos.y; // bbox is in entry-local space shifted by pos
+      const dy = gh - curMinY;
+      _selectedObject.position.y += dy;
+      _selectedObject.updateMatrixWorld(true);
+      updatePropTransform(_selectedMergedId, _selectedObject.matrix);
+    }
+  } else {
+    const box = new THREE.Box3().setFromObject(_selectedObject);
+    const curMinY = box.min.y;
+    const dy = gh - curMinY;
+    _selectedObject.position.y += dy;
+    _selectedObject.updateMatrixWorld(true);
+    if (findPlacementByObject(_selectedObject)) updateGlbPlacement(_selectedObject);
+  }
   _syncHudValues();
   showNotification('Snapped to terrain elevation', 'success', 1600);
 }
 
 export function deleteSelected() {
   if (!_selectedObject) return;
+  if (_selectedMergedId) {
+    const id = _selectedMergedId;
+    deselectObject();
+    removeProp(id);
+    showNotification('Removed merged prop', 'warn', 1600);
+    return;
+  }
   const target = _selectedObject;
   deselectObject();
   removeGlbPlacement(target);
@@ -216,12 +294,19 @@ export function deleteSelected() {
 
 export function duplicateSelected() {
   if (!_selectedObject) return;
+  if (_selectedMergedId) {
+    const newId = duplicateProp(_selectedMergedId, new THREE.Vector3(2, 0, 2));
+    if (newId) {
+      _selectMergedProp(newId);
+      showNotification('Duplicated merged prop (offset by +2m)', 'success', 1800);
+    }
+    return;
+  }
   const p = findPlacementByObject(_selectedObject);
   let clone = null;
   if (p) {
     clone = duplicateGlbPlacement(_selectedObject);
   } else {
-    // Generic prop duplication (level-built models like bridges/houses)
     clone = _selectedObject.clone(true);
     clone.name = `prop_dup_${Date.now().toString(36)}`;
     clone.position.x += 2.0;
